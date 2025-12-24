@@ -1,16 +1,8 @@
 'use client'
-import {
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuSub,
-} from "@/components/ui/sidebar"
 import React, { useEffect, useState } from "react"
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import useArticleStore, { DirTree } from "@/stores/article"
-import { BaseDirectory, rename, writeTextFile } from "@tauri-apps/plugin-fs"
+import { BaseDirectory, rename, writeTextFile, writeFile } from "@tauri-apps/plugin-fs"
 import { FileItem } from './file-item'
 import { FolderItem } from "./folder-item"
 import { computedParentPath } from "@/lib/path"
@@ -29,7 +21,7 @@ function Tree({ item }: { item: DirTree }) {
   return (
     item.isFile ? 
     <FileItem item={item} /> :
-    <SidebarMenuItem>
+    <li>
       <Collapsible
         onOpenChange={handleCollapse}
         className="group/collapsible [&[data-state=open]>button>.file-manange-item>svg:first-child]:rotate-90"
@@ -37,14 +29,14 @@ function Tree({ item }: { item: DirTree }) {
       >
         <FolderItem item={item} />
         <CollapsibleContent className="pl-1">
-          <SidebarMenuSub>
+          <ul className="pl-2">
             {item.children?.map((subItem) => (
               <Tree key={subItem.name} item={subItem} />
             ))}
-          </SidebarMenuSub>
+          </ul>
         </CollapsibleContent>
       </Collapsible>
-    </SidebarMenuItem>
+    </li>
   )
 }
 
@@ -86,11 +78,29 @@ export function FileManager() {
       const files = e.dataTransfer.files
       for (let i = 0; i < files.length; i += 1) {
         const file = files[i]
+        // 接受 markdown 和图片文件
         if (file.name.endsWith('.md')) {
           const text = await file.text()
-          await writeTextFile(`article/${file.name}`, text, { baseDir: BaseDirectory.AppData })
+          // 处理文件名，将空格替换为下划线以保持一致性
+          const sanitizedFileName = file.name.replace(/\s+/g, '_')
+
+          await writeTextFile(`article/${sanitizedFileName}`, text, { baseDir: BaseDirectory.AppData })
           addFile({
-            name: file.name,
+            name: sanitizedFileName,
+            isEditing: false,
+            isLocale: true,
+            isDirectory: false,
+            isFile: true,
+            isSymlink: false
+          })
+        } else if (file.name.match(/\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i)) {
+          // 处理图片文件，同样需要处理文件名以保持一致性
+          const arrayBuffer = await file.arrayBuffer()
+          const uint8Array = new Uint8Array(arrayBuffer)
+          const sanitizedImageFileName = file.name.replace(/\s+/g, '_')
+          await writeFile(`article/${sanitizedImageFileName}`, uint8Array, { baseDir: BaseDirectory.AppData })
+          addFile({
+            name: sanitizedImageFileName,
             isEditing: false,
             isLocale: true,
             isDirectory: false,
@@ -120,10 +130,10 @@ export function FileManager() {
   }, [loadFileTree])
 
   return (
-    <SidebarContent className={`${isDragging && 'outline-2 outline-black outline-dotted -outline-offset-4'}`}>
-      <SidebarGroup className="flex-1 p-0">
-        <SidebarGroupContent className="flex-1">
-          <SidebarMenu className="h-full">
+    <div className={`flex-1 overflow-y-auto ${isDragging && 'outline-2 outline-black outline-dotted -outline-offset-4'}`}>
+      <div className="flex-1 p-0">
+        <div className="flex-1">
+          <ul className="h-full">
             <div
               className="min-h-0.5"
               onDrop={(e) => handleDrop(e)}
@@ -141,9 +151,9 @@ export function FileManager() {
               onDragLeave={(e) => handleDragleave(e)}
             >
             </div>
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
-    </SidebarContent>
+          </ul>
+        </div>
+      </div>
+    </div>
   )
 }

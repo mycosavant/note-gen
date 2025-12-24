@@ -1,23 +1,21 @@
 import { TooltipButton } from "@/components/tooltip-button"
 import { insertMark, Mark } from "@/db/marks"
 import { useTranslations } from 'next-intl'
-import { fetchAiDesc } from "@/lib/ai"
+import { fetchAiDesc, fetchAiDescByImage } from "@/lib/ai"
 import ocr from "@/lib/ocr"
 import useMarkStore from "@/stores/mark"
 import useTagStore from "@/stores/tag"
 import { BaseDirectory, copyFile, exists, mkdir, readFile } from "@tauri-apps/plugin-fs"
 import { ImagePlus } from "lucide-react"
-import { uploadFile, uint8ArrayToBase64 } from "@/lib/github"
 import useSettingStore from "@/stores/setting"
 import { v4 as uuid } from 'uuid'
-import { RepoNames } from "@/lib/github.types"
 import { open } from '@tauri-apps/plugin-dialog';
-import dayjs from "dayjs"
+import { uploadImage } from "@/lib/imageHosting"
 
 export function ControlImage() {
   const t = useTranslations();
   const { currentTagId, fetchTags, getCurrentTag } = useTagStore()
-  const { apiKey, githubUsername } = useSettingStore()
+  const { primaryModel, primaryImageMethod, enableImageRecognition } = useSettingStore()
   const { fetchMarks, addQueue, setQueue, removeQueue } = useMarkStore()
 
   async function selectImages() {
@@ -31,30 +29,47 @@ export function ControlImage() {
     });
     if (!filePaths) return
     filePaths.forEach(async (path) => {
-      await uploadImage(path)
+      await upload(path)
     })
   }
 
-  async function uploadImage(path: string) {
+  async function upload(path: string) {
     const queueId = uuid()
-    addQueue({ queueId, progress: t('record.mark.progress.cacheImage'), type: 'image', startTime: Date.now() })
+    addQueue({ queueId, tagId: currentTagId!, progress: t('record.mark.progress.cacheImage'), type: 'image', startTime: Date.now() })
     const ext = path.substring(path.lastIndexOf('.') + 1)
     const isImageFolderExists = await exists('image', { baseDir: BaseDirectory.AppData})
     if (!isImageFolderExists) {
       await mkdir('image', { baseDir: BaseDirectory.AppData})
     }
     await copyFile(path, `image/${queueId}.${ext}`, { toPathBaseDir: BaseDirectory.AppData})
-    const file = await readFile(path)
+    const fileData = await readFile(path)
     const filename = `${queueId}.${ext}`
-    setQueue(queueId, { progress: t('record.mark.progress.ocr') });
-    const content = await ocr(`image/${filename}`)
-    setQueue(queueId, { progress: t('record.mark.progress.aiAnalysis') });
+    let content = ''
     let desc = ''
-    if (apiKey) {
-      desc = await fetchAiDesc(content).then(res => res ? res : content) || content
-    } else {
+    
+    // Skip image recognition if disabled
+    if (!enableImageRecognition) {
+      setQueue(queueId, { progress: t('record.mark.progress.save') });
+      content = ''
+      desc = ''
+    } else if (primaryImageMethod === 'vlm') {
+      // 使用 VLM 识别图片
+      setQueue(queueId, { progress: t('record.mark.progress.aiAnalysis') });
+      const base64 = `data:image/${ext};base64,${Buffer.from(fileData).toString('base64')}`
+      content = await fetchAiDescByImage(base64) || 'VLM Error'
       desc = content
+    } else {
+      // 使用 OCR 识别图片
+      setQueue(queueId, { progress: t('record.mark.progress.ocr') });
+      content = await ocr(`image/${filename}`)
+      setQueue(queueId, { progress: t('record.mark.progress.aiAnalysis') });
+      if (primaryModel) {
+        desc = await fetchAiDesc(content).then(res => res ? res : content) || content
+      } else {
+        desc = content
+      }
     }
+    
     const mark: Partial<Mark> = {
       tagId: currentTagId,
       type: 'image',
@@ -62,24 +77,15 @@ export function ControlImage() {
       url: filename,
       desc,
     }
-    if (githubUsername) {
+    
+    // 尝试上传图片到图床（如果配置了图床）
+    const file = new File([new Uint8Array(fileData)], filename, { type: `image/${ext}` })
+    const url = await uploadImage(file)
+    if (url) {
       setQueue(queueId, { progress: t('record.mark.progress.uploadImage') });
-      const path = dayjs().format('YYYY-MM')
-      const res = await uploadFile({
-        ext,
-        file: uint8ArrayToBase64(file),
-        filename,
-        repo: RepoNames.image,
-        path
-      })
-      if (res) {
-        setQueue(queueId, { progress: t('record.mark.progress.jsdelivrCache') });
-        await fetch(`https://purge.jsdelivr.net/gh/${githubUsername}/${RepoNames.image}@main/${path}/${res.data.content.name}`)
-        mark.url = `https://cdn.jsdelivr.net/gh/${githubUsername}/${RepoNames.image}@main/${path}/${res.data.content.name}`
-      } else {
-        mark.url = filename
-      }
+      mark.url = url
     }
+    
     removeQueue(queueId)
     await insertMark(mark)
     await fetchMarks()

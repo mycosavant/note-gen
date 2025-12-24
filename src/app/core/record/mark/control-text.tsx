@@ -15,7 +15,8 @@ import { insertMark } from "@/db/marks"
 import useMarkStore from "@/stores/mark"
 import useTagStore from "@/stores/tag"
 import { CopySlash } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import emitter from "@/lib/emitter"
 
 export function ControlText() {
   const t = useTranslations();
@@ -35,12 +36,21 @@ export function ControlText() {
     setOpen(false)
   }
 
+  useEffect(() => {
+    emitter.on('quickRecordTextHandler', () => {
+      setOpen(true)
+    })
+    return () => {
+      emitter.off('quickRecordTextHandler')
+    }
+  }, [])
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <TooltipButton icon={<CopySlash />} tooltipText={t('record.mark.type.text')} />
       </DialogTrigger>
-      <DialogContent className="min-w-[650px]">
+      <DialogContent className="min-w-full md:min-w-[650px]">
         <DialogHeader>
           <DialogTitle>{t('record.mark.text.title')}</DialogTitle>
           <DialogDescription>

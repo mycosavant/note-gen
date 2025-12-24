@@ -1,5 +1,5 @@
 "use client"
-import { NotebookPen } from "lucide-react"
+import { Send, Square } from "lucide-react"
 import useSettingStore, { GenTemplate, GenTemplateRange } from "@/stores/setting"
 import useChatStore from "@/stores/chat"
 import useTagStore from "@/stores/tag"
@@ -28,6 +28,8 @@ import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation";
 import dayjs, { Dayjs } from "dayjs"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Checkbox } from "@/components/ui/checkbox"
+import { useTranslations } from "next-intl"
 
 interface MarkGenProps {
   inputValue?: string;
@@ -35,7 +37,7 @@ interface MarkGenProps {
 
 export const MarkGen = forwardRef<{ openGen: () => void }, MarkGenProps>(({ inputValue }, ref) => {
   const [open, setOpen] = useState(false)
-  const { apiKey } = useSettingStore()
+  const { primaryModel } = useSettingStore()
   const { currentTagId } = useTagStore()
   const { insert, loading, setLoading, saveChat, locale } = useChatStore()
   const { fetchMarks, marks } = useMarkStore()
@@ -43,6 +45,8 @@ export const MarkGen = forwardRef<{ openGen: () => void }, MarkGenProps>(({ inpu
   const [genTemplate, setGenTemplate] = useState<GenTemplate[]>([])
   const router = useRouter()
   const abortControllerRef = useRef<AbortController | null>(null)
+  const [isRemoveThinking, setIsRemoveThinking] = useState(true)
+  const t = useTranslations('record.chat.note')
 
   async function initGenTemplates() {
     const store = await Store.load('store.json')
@@ -90,7 +94,7 @@ export const MarkGen = forwardRef<{ openGen: () => void }, MarkGenProps>(({ inpu
 
   async function handleGen() {
     setOpen(false)
-    if (!apiKey) return
+    if (!primaryModel) return
     setLoading(true)
     const message = await insert({
       tagId: currentTagId,
@@ -123,10 +127,19 @@ export const MarkGen = forwardRef<{ openGen: () => void }, MarkGenProps>(({ inpu
       case GenTemplateRange.Year:
         subtractDate = dayjs().subtract(1, 'year')
         break
+      default:
+        subtractDate = dayjs().subtract(99, 'year')
+        break
     };
     const marksByRange = marks.filter(item => dayjs(item.createdAt).isAfter(subtractDate))
     const scanMarks = marksByRange.filter(item => item.type === 'scan')
-    const textMarks = marksByRange.filter(item => item.type === 'text')
+    const textMarks = marksByRange.filter(item => item.type === 'text').map(item => {
+      if (!item.content) return item
+      if (isRemoveThinking) {
+        item.content = item.content.replace(/<thinking>[\s\S]*?<thinking>/g, '');
+      }
+      return item
+    })
     const imageMarks = marksByRange.filter(item => item.type === 'image')
     const linkMarks = marksByRange.filter(item => item.type === 'link')
     const fileMarks = marksByRange.filter(item => item.type === 'file')
@@ -216,14 +229,32 @@ export const MarkGen = forwardRef<{ openGen: () => void }, MarkGenProps>(({ inpu
     router.push('/core/setting/template');
   }
 
-  return (
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+  }
+
+  return loading ?
+    <TooltipButton
+      size="sm"
+      variant="destructive"
+      icon={<Square />}
+      tooltipText={t('cancel')}
+      onClick={handleStop}
+    /> : 
     <AlertDialog onOpenChange={openGen} open={open}>
       <AlertDialogTrigger className="relative" asChild>
-        <TooltipButton size="sm" variant={"default"} icon={<NotebookPen />} disabled={loading || !apiKey} tooltipText="整理" />
+        <TooltipButton
+          size="sm"
+          variant="default"
+          icon={<Send />}
+          tooltipText={t('organize')}
+        />
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>将记录整理成...</AlertDialogTitle> 
+          <AlertDialogTitle>{t('organizeAs')}</AlertDialogTitle> 
           <Tabs defaultValue={tab} onValueChange={value => setTab(value)}>
             <TabsList>
               {
@@ -234,28 +265,30 @@ export const MarkGen = forwardRef<{ openGen: () => void }, MarkGenProps>(({ inpu
             </TabsList>
           </Tabs>
         </AlertDialogHeader>
-        <div className="px-2 space-y-2">
+        <div className="flex flex-col gap-4">
           <div className="space-y-1">
-            <Label htmlFor="name">模板内容</Label>
+            <div className="flex items-center justify-between mb-2">
+              <Label htmlFor="name">{t('templateContent')}</Label>
+              <Label>{t('recordRange')}: { genTemplate.find(item => item.id === tab)?.range }</Label>
+            </div>
             <ScrollArea className="h-32 w-full p-2 rounded-md border">
               <p className="text-xs text-muted-foreground whitespace-pre-wrap">
                 { genTemplate.find(item => item.id === tab)?.content }
               </p>
             </ScrollArea>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="username">记录选择范围</Label>
-            <p className="text-xs text-muted-foreground">{ genTemplate.find(item => item.id === tab)?.range }</p>
+          <div className="flex items-center gap-2">
+            <Checkbox id="remove-thinking" checked={isRemoveThinking} onCheckedChange={(checked) => setIsRemoveThinking(checked === true)} />
+            <Label htmlFor="remove-thinking">{t('filterThinkingContent')}</Label>
           </div>
         </div>
         <AlertDialogFooter>
-          <Button variant={"ghost"} disabled={loading} onClick={handleSetting}>管理模板</Button>
-          <Button variant={"outline"} onClick={() => setOpen(false)}>取消</Button>
-          <Button onClick={handleGen}>开始整理</Button>
+          <Button variant={"ghost"} disabled={loading} onClick={handleSetting}>{t('manageTemplate')}</Button>
+          <Button variant={"outline"} onClick={() => setOpen(false)}>{t('cancel')}</Button>
+          <Button onClick={handleGen}>{t('startOrganize')}</Button>
         </AlertDialogFooter>
-      </AlertDialogContent>
+      </AlertDialogContent> 
     </AlertDialog>
-  )
 })
 
 MarkGen.displayName = 'MarkGen';

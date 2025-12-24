@@ -1,118 +1,61 @@
-![note-gen](https://socialify.git.ci/codexu/note-gen/image?custom_description=Cross-Platform+%7C+LLM+%7C+Markdown+%7C++Recording++%26+Writing&description=1&font=Raleway&forks=1&issues=1&logo=https%3A%2F%2Fcamo.githubusercontent.com%2Fbe4a3a39f8724658ad5bc549d63f0454ad4ca98564c73b7b0778704ca5212509%2F68747470733a2f2f73322e6c6f6c692e6e65742f323032352f30352f32362f594d4e67784b5644724238345a74572e706e67&name=1&owner=1&pattern=Circuit+Board&stargazers=1&theme=Light)
-
 # NoteGen
 
+![](https://img.shields.io/badge/free-pricing?logo=free&color=%20%23155EEF&label=pricing&labelColor=%20%23528bff)
+[![GitHub Repo stars](https://img.shields.io/github/stars/codexu/note-gen)](https://github.com/codexu/note-gen)
+[![](https://gitcode.com/codexu/note-gen/star/badge.svg)](https://gitcode.com/codexu/note-gen)
 ![](https://github.com/codexu/note-gen/actions/workflows/release.yml/badge.svg?branch=release)
-![](https://img.shields.io/github/v/release/codexu/note-gen)
-![](https://img.shields.io/badge/version-alpha-orange)
+[![Netlify Status](https://api.netlify.com/api/v1/badges/8f7518c3-b627-4277-bc2f-e477960f5dc4/deploy-status)](https://app.netlify.com/projects/note-gen-docs/deploys)
 ![](https://img.shields.io/github/downloads/codexu/note-gen/total)
-![](https://img.shields.io/github/commit-activity/m/codexu/note-gen)
+![](https://img.shields.io/github/issues-closed/codexu/note-gen)
 
-English | [简体中文](.github/README.zh.md) | [日本語](.github/README.ja.md)
-
-<div style="display: flex; gap: 1rem;">
-  <a href="https://www.producthunt.com/products/notegen-2?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-notegen&#0045;2" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=956348&theme=light&t=1749194675492" alt="NoteGen - A&#0032;cross&#0045;platform&#0032;Markdown&#0032;note&#0045;taking&#0032;application | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
-
+<div>
   <a href="https://trendshift.io/repositories/12784" target="_blank"><img src="https://trendshift.io/api/badge/repositories/12784" alt="codexu%2Fnote-gen | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+  <a href="https://hellogithub.com/repository/0163cb946dca44cc8905dbe34c2c987b" target="_blank"><img src="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=0163cb946dca44cc8905dbe34c2c987b&claim_uid=YJ39kIMBz1TGAvc" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+  <a href="https://www.producthunt.com/products/notegen-2?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-notegen&#0045;2" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=956348&theme=light&t=1749194675492" alt="NoteGen - A&#0032;cross&#0045;platform&#0032;Markdown&#0032;note&#0045;taking&#0032;application | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
 </div>
 
 ## Guide
 
+🖥️ Official Document: [English](https://notegen.top/en/) | [简体中文](https://notegen.top/cn/)
+
+💬 Join [WeChat/QQ Group](https://github.com/codexu/note-gen/discussions/110), [Discord](https://discord.gg/SXyVZGpbpk), [Telegram](https://t.me/notegen)
+
 NoteGen is a cross-platform `Markdown` note-taking application dedicated to using AI to bridge recording and writing, organizing fragmented knowledge into a readable note.
 
-🖥️ Official Document: [https://notegen.top](https://notegen.top)
+![](https://s2.loli.net/2025/12/22/jlpEP2c6ogwHhIA.png)
 
-💬 Join [WeChat/QQ Group](https://github.com/codexu/note-gen/discussions/110)
+## Features
 
-## Why Choose NoteGen?
+- 🚀 Lightweight (25MB), free, no ads.
+- 🌐 Cross-platform support.
+- 🆓 Free AI and sync solutions.
+- 📦 Out-of-the-box RAG support.
+- 🔌 MCP support for AI tool integration.
+- ✍️ Quick note-taking for fragmented information.
+- 📝 Native Markdown storage format.
 
-- Lightweight: [Installation package](https://github.com/codexu/note-gen/releases) is **only 20MB**, free with no ads or bundled software.
-- Cross-platform: Supports Mac, Windows, Linux, and thanks to `Tauri2`'s cross-platform capabilities, will support iOS and Android in the future.
-- Supports multiple recording methods including `screenshots`, `text`, `illustrations`, `files`, `links`, etc., meeting fragmented recording needs across various scenarios.
-- Native `Markdown(.md)` as storage format, no modifications, easy to migrate.
-- Native offline usage, supporting real-time synchronization to `GitHub, Gitee private repositories` with history rollback, and WebDAV synchronization.
-- AI-enhanced: Configurable with ChatGPT, Gemini, Ollama, LM Studio, Grok, and other models, with support for custom third-party model configuration.
-- RAG: Your notes are your knowledge base. Support embedding models and reranking models.
+## Download
 
-## Screenshots
+| ![Windows](https://img.shields.io/badge/Windows-0078D4?logo=windows&logoColor=white&style=for-the-badge) | ![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white&style=for-the-badge) | ![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black&style=for-the-badge) | ![Android](https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white&style=for-the-badge) | ![iOS](https://img.shields.io/badge/iOS-000000?logo=apple&logoColor=white&style=for-the-badge) |
+| --- | --- | --- | --- | --- |
+| ✅ beta | ✅ beta | ✅ beta | 🛠️ alpha | 🛠️ alpha |
+| [Download](https://notegen.top/en/docs/download#desktop-beta) | [Download](https://notegen.top/en/docs/download#desktop-beta) | [Download](https://notegen.top/en/docs/download#desktop-beta) | [Download](https://notegen.top/en/docs/download#android) | [TestFlight](https://testflight.apple.com/join/8KjFRTCq) |
 
-
-https://github.com/user-attachments/assets/4f8a3bc5-17f5-4b36-9b17-d87128685257
-
-
-Recording:
-
-![1.png](https://s2.loli.net/2025/05/19/Cs5viKfkqb2HJmd.png)
-
-Writing:
-
-![2.png](https://s2.loli.net/2025/05/19/5vwQBPoLr6jzgUA.png)
-
-Theme:
-
-![3.png](https://s2.loli.net/2025/05/19/8yU72prmWdsCHeu.png)
+> [UpgradeLink offers application upgrade and download services](http://upgrade.toolsetlink.com/upgrade/example/tauri-example.html)
 
 ## From Recording to Writing
 
-Conventional note-taking applications typically don't provide recording functionality. Users need to manually copy and paste content for recording, which greatly reduces efficiency. When faced with scattered recorded content, it requires significant effort to organize.
+Traditional note-taking apps typically don't offer note-taking functionality, but NoteGen makes it easier for you to record scattered knowledge points and avoid disrupting your train of thought while taking notes.
 
-NoteGen is divided into `Recording` and `Writing` pages, with the following relationship:
+NoteGen is divided into three parts: Recording, Notes, and AI Dialogue. They have the following features: 
 
-- Recordings can be organized into notes and transferred to the writing page for in-depth composition.
-- During writing, you can insert recordings at any time.
-
-### Recording
-
-The recording function is similar to an **AI chatbot**, but when conversing with it, you can associate it with previously recorded content, switching from conversation mode to organization mode to arrange recordings into a readable note.
-
-The following auxiliary features can help you record more effectively:
-
-- **Tags** to distinguish different recording scenarios.
-- **Personas** with support for custom prompts to precisely control your AI assistant.
-- **Clipboard Assistant** that automatically recognizes text or images in your clipboard and records them to your list.
-
-### Writing
-
-The writing section is divided into two parts: **File Manager** and **Markdown Editor**.
-
-**File Manager**
-
-- Supports management of local Markdown files and GitHub synchronized files.
-- Supports unlimited directory hierarchy.
-- Supports multiple sorting methods.
-
-**Markdown Editor**
-
-- Supports WYSIWYG, instant rendering, and split-screen preview modes.
-- Supports version control with history rollback.
-- Supports AI assistance for conversation, continuation, polishing, and translation functions.
-- Supports image hosting, uploading images and converting them to Markdown image links.
-- Supports HTML to Markdown conversion, automatically converting copied browser content to Markdown format.
-- Supports outlines, math formulas, mind maps, charts, flowcharts, Gantt charts, sequence diagrams, staves, multimedia, voice reading, title anchors, code highlighting and copying, graphviz rendering, and plantuml UML diagrams.
-- Supports real-time local content saving, delayed (10s without editing) automatic synchronization, and history rollback.
-
-## Other Features
-
-- Global search for quickly finding and jumping to specific content.
-- Image hosting management for convenient management of image repository content.
-- Themes and appearance with support for dark themes and appearance settings for Markdown, code, etc.
-- Internationalization support, currently available in Chinese and English.
-
-## How to Use?
-
-### Download
-
-Currently supports Mac, Windows, and Linux. Thanks to Tauri2's cross-platform capabilities, it will support iOS and Android in the future.
-
-[Download NoteGen (alpha)](https://github.com/codexu/note-gen/releases)
-
-### Enhancement
-
-The note-taking application can be used directly without configuration. If you want a better experience, please open the settings page to configure AI and synchronization.
+- You don't need to consider the order and logic of recording, AI will help you organize the notes into well-organized and coherent ones.
+- AI Dialogue is a feature that allows you to interact with AI in real-time, helping you to better understand and remember the content you are recording.
+- The note-taking feature can help you optimize the details of your notes independently.
 
 ## Contribute
 
-- [Read contribution guide](.github/CONTRIBUTING.md)
+- [Read contribution guide](https://notegen.top/en/docs/contributing)
 - [Update plans](https://github.com/codexu/note-gen/issues/46)
 - [Submit bugs or improvement suggestions](https://github.com/codexu/note-gen/issues)
 - [Discussions](https://github.com/codexu/note-gen/discussions)
@@ -123,6 +66,43 @@ The note-taking application can be used directly without configuration. If you w
   <img src="https://contrib.rocks/image?repo=codexu/note-gen" />
 </a>
 
-## Star History
+## Thanks
 
-[![Star History Chart](https://api.star-history.com/svg?repos=codexu/note-gen&type=Date)](https://www.star-history.com/#codexu/note-gen&Date)
+Special thanks to our technology partners who make NoteGen better:
+
+**[SiliconFlow](https://cloud.siliconflow.cn/i/O2ciJeZw)** - Providing free AI model services, powering NoteGen's intelligent features with high-quality AI capabilities.
+
+<a href="https://cloud.siliconflow.cn/i/O2ciJeZw" target="_blank">
+  <img width="240" src="https://s2.loli.net/2025/09/10/KWPOA5XhIGmYTV9.png" />
+</a>
+
+**[UpgradeLink](http://upgrade.toolsetlink.com/upgrade/example/tauri-example.html)** - Providing reliable installation and upgrade services, ensuring seamless software updates for users.
+
+<a href="http://upgrade.toolsetlink.com/upgrade/example/tauri-example.html" target="_blank">
+  <img width="240" src="https://s2.loli.net/2025/09/10/Ks4EayU9HguXDMF.png" />
+</a>
+
+---
+
+We also thank other partners for their service support
+
+<div>
+  <a href="https://www.qiniu.com/products/ai-token-api?utm_source=NoteGen" target="_blank">
+    <img src="https://s2.loli.net/2025/06/11/OKJq542lTs7U9xg.png" />
+  </a>
+  <a href="https://share.302.ai/jfFrIP" target="_blank">
+    <img src="https://s2.loli.net/2025/07/01/dPlkU1tejnDyV4S.png" />
+  </a>
+  <a href="https://www.shengsuanyun.com/?from=CH_KAFLGC9O" target="_blank">
+    <img src="https://s2.loli.net/2025/09/15/CcVRbTUBtf7ZvNl.png" />
+  </a>
+  <a href="https://ai.gitee.com/" target="_blank">
+    <img src="https://s2.loli.net/2025/09/15/wmnBWfyACMz9pVc.png" />
+  </a>
+  <a href="https://www.netlify.com" target="_blank">
+    <img src="https://s2.loli.net/2025/09/16/yJ64xIlrhdABt9o.png" />
+  </a>
+  <a href="https://skywork.ai/p/bY47ky" target="_blank">
+    <img src="https://s2.loli.net/2025/09/16/mTzMCQ8tZLfJNk5.png" />
+  </a>
+</div>

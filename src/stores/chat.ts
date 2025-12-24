@@ -1,7 +1,26 @@
 import { create } from 'zustand'
-import { Chat, clearChatsByTagId, deleteChat, getChats, initChatsDb, insertChat, updateChat, updateChatsInsertedById } from '@/db/chats'
+import { Chat, clearChatsByTagId, deleteChat, getChats, initChatsDb, insertChat, updateChat, updateChatsInsertedById, getAllChats, deleteAllChats, insertChats } from '@/db/chats'
+import { uploadFile as uploadGithubFile, getFiles as githubGetFiles, decodeBase64ToString } from '@/lib/sync/github';
+import { uploadFile as uploadGiteeFile, getFiles as giteeGetFiles } from '@/lib/sync/gitee';
+import { uploadFile as uploadGitlabFile, getFiles as gitlabGetFiles, getFileContent as gitlabGetFileContent } from '@/lib/sync/gitlab';
+import { uploadFile as uploadGiteaFile, getFiles as giteaGetFiles, getFileContent as giteaGetFileContent } from '@/lib/sync/gitea';
+import { getSyncRepoName } from '@/lib/sync/repo-utils';
 import { Store } from '@tauri-apps/plugin-store';
 import { locales } from '@/lib/locales';
+import { ChatMode, AgentState, ToolCall } from '@/lib/agent/types';
+
+// MCP 工具调用记录（临时，不保存到数据库）
+export interface McpToolCall {
+  id: string
+  chatId: number // 关联的 chat ID
+  toolName: string
+  serverId: string
+  serverName: string
+  params: Record<string, any>
+  result: string
+  status: 'calling' | 'success' | 'error'
+  timestamp: number
+}
 
 interface ChatState {
   loading: boolean
@@ -26,6 +45,31 @@ interface ChatState {
 
   clearChats: (tagId: number) => Promise<void> // 清空 chats
   updateInsert: (id: number) => Promise<void> // 更新 inserted
+
+  // 同步
+  syncState: boolean
+  setSyncState: (syncState: boolean) => void
+  lastSyncTime: string
+  setLastSyncTime: (lastSyncTime: string) => void
+  uploadChats: () => Promise<boolean>
+  downloadChats: () => Promise<Chat[]>
+  
+  // MCP 工具调用记录（临时缓存）
+  mcpToolCalls: McpToolCall[]
+  addMcpToolCall: (toolCall: McpToolCall) => void
+  updateMcpToolCall: (id: string, updates: Partial<McpToolCall>) => void
+  getMcpToolCallsByChatId: (chatId: number) => McpToolCall[]
+  clearMcpToolCalls: () => void
+
+  // Agent 模式
+  chatMode: ChatMode
+  setChatMode: (mode: ChatMode) => void
+  
+  agentState: AgentState
+  setAgentState: (state: Partial<AgentState>) => void
+  resetAgentState: () => void
+  addAgentToolCall: (toolCall: ToolCall) => void
+  updateAgentToolCall: (id: string, updates: Partial<ToolCall>) => void
 }
 
 const useChatStore = create<ChatState>((set, get) => ({
@@ -44,6 +88,71 @@ const useChatStore = create<ChatState>((set, get) => ({
   setPlaceholderEnabled: (isEnabled: boolean) => {
     set({ isPlaceholderEnabled: isEnabled })
   },
+
+  chatMode: (typeof window !== 'undefined' ? localStorage.getItem('chatMode') as ChatMode : null) || 'chat',
+  setChatMode: (mode: ChatMode) => {
+    set({ chatMode: mode })
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('chatMode', mode)
+    }
+  },
+
+  agentState: {
+    isRunning: false,
+    currentThought: '',
+    thoughtHistory: [],
+    currentAction: undefined,
+    currentObservation: undefined,
+    toolCalls: [],
+    maxIterations: 15,
+    currentIteration: 0,
+    pendingConfirmation: undefined,
+    confirmationHistory: [],
+  },
+
+  setAgentState: (state: Partial<AgentState>) => {
+    set({ agentState: { ...get().agentState, ...state } })
+  },
+
+  resetAgentState: () => {
+    set({
+      agentState: {
+        isRunning: false,
+        currentThought: '',
+        thoughtHistory: [],
+        currentAction: '',
+        currentObservation: '',
+        toolCalls: [],
+        maxIterations: 15,
+        currentIteration: 0,
+        pendingConfirmation: undefined,
+        confirmationHistory: [],
+      }
+    })
+  },
+
+  addAgentToolCall: (toolCall: ToolCall) => {
+    const agentState = get().agentState
+    set({
+      agentState: {
+        ...agentState,
+        toolCalls: [...agentState.toolCalls, toolCall]
+      }
+    })
+  },
+
+  updateAgentToolCall: (id: string, updates: Partial<ToolCall>) => {
+    const agentState = get().agentState
+    set({
+      agentState: {
+        ...agentState,
+        toolCalls: agentState.toolCalls.map(call =>
+          call.id === id ? { ...call, ...updates } : call
+        )
+      }
+    })
+  },
+
   chats: [],
   init: async (tagId: number) => {
     await initChatsDb()
@@ -117,6 +226,148 @@ const useChatStore = create<ChatState>((set, get) => ({
       return item
     })
     set({ chats: newChats })
+  },
+
+  // 同步
+  syncState: false,
+  setSyncState: (syncState) => {
+    set({ syncState })
+  },
+  lastSyncTime: '',
+  setLastSyncTime: (lastSyncTime) => {
+    set({ lastSyncTime })
+  },
+  uploadChats: async () => {
+    set({ syncState: true })
+    const path = '.data'
+    const filename = 'chats.json'
+    const chats = await getAllChats()
+    const store = await Store.load('store.json');
+    const jsonToBase64 = (data: Chat[]) => {
+      return Buffer.from(JSON.stringify(data, null, 2)).toString('base64');
+    }
+    const primaryBackupMethod = await store.get<string>('primaryBackupMethod') || 'github';
+    let result = false
+    let files: any;
+    let res;
+    switch (primaryBackupMethod) {
+      case 'github':
+        const githubRepo = await getSyncRepoName('github')
+        files = await githubGetFiles({ path: `${path}/${filename}`, repo: githubRepo })
+        res = await uploadGithubFile({
+          ext: 'json',
+          file: jsonToBase64(chats),
+          repo: githubRepo,
+          path,
+          filename,
+          sha: files?.sha,
+        })
+        break;
+      case 'gitee':
+        const giteeRepo = await getSyncRepoName('gitee')
+        files = await giteeGetFiles({ path: `${path}/${filename}`, repo: giteeRepo })
+        res = await uploadGiteeFile({
+          ext: 'json',
+          file: jsonToBase64(chats),
+          repo: giteeRepo,
+          path,
+          filename,
+          sha: files?.sha,
+        })
+        break;
+      case 'gitlab':
+        const gitlabRepo = await getSyncRepoName('gitlab')
+        files = await gitlabGetFiles({ path, repo: gitlabRepo })
+        const chatFile = Array.isArray(files)
+          ? files.find(file => file.name === filename)
+          : (files?.name === filename ? files : undefined)
+        res = await uploadGitlabFile({
+          ext: 'json',
+          file: jsonToBase64(chats),
+          repo: gitlabRepo,
+          path,
+          filename,
+          sha: chatFile?.sha || '',
+        })
+        break;
+      case 'gitea':
+        const giteaRepo = await getSyncRepoName('gitea')
+        files = await giteaGetFiles({ path, repo: giteaRepo })
+        const giteaChatFile = Array.isArray(files)
+          ? files.find(file => file.name === filename)
+          : (files?.name === filename ? files : undefined)
+        res = await uploadGiteaFile({
+          ext: 'json',
+          file: jsonToBase64(chats),
+          repo: giteaRepo,
+          path,
+          filename,
+          sha: giteaChatFile?.sha || '',
+        })
+        break;
+    }
+    if (res) {
+      result = true
+    }
+    set({ syncState: false })
+    return result
+  },
+  // MCP 工具调用记录
+  mcpToolCalls: [],
+  
+  addMcpToolCall: (toolCall: McpToolCall) => {
+    const mcpToolCalls = get().mcpToolCalls
+    set({ mcpToolCalls: [...mcpToolCalls, toolCall] })
+  },
+  
+  updateMcpToolCall: (id: string, updates: Partial<McpToolCall>) => {
+    const mcpToolCalls = get().mcpToolCalls.map(call =>
+      call.id === id ? { ...call, ...updates } : call
+    )
+    set({ mcpToolCalls })
+  },
+  
+  getMcpToolCallsByChatId: (chatId: number) => {
+    return get().mcpToolCalls.filter(call => call.chatId === chatId)
+  },
+  
+  clearMcpToolCalls: () => {
+    set({ mcpToolCalls: [] })
+  },
+  
+  downloadChats: async () => {
+    const path = '.data'
+    const filename = 'chats.json'
+    const store = await Store.load('store.json');
+    const primaryBackupMethod = await store.get<string>('primaryBackupMethod') || 'github';
+    let result = []
+    let files;
+    switch (primaryBackupMethod) {
+      case 'github':
+        const githubRepo2 = await getSyncRepoName('github')
+        files = await githubGetFiles({ path: `${path}/${filename}`, repo: githubRepo2 })
+        break;
+      case 'gitee':
+        const giteeRepo2 = await getSyncRepoName('gitee')
+        files = await giteeGetFiles({ path: `${path}/${filename}`, repo: giteeRepo2 })
+        break;
+      case 'gitlab':
+        const gitlabRepo2 = await getSyncRepoName('gitlab')
+        files = await gitlabGetFileContent({ path: `${path}/${filename}`, ref: 'main', repo: gitlabRepo2 })
+        break;
+      case 'gitea':
+        const giteaRepo2 = await getSyncRepoName('gitea')
+        files = await giteaGetFileContent({ path: `${path}/${filename}`, ref: 'main', repo: giteaRepo2 })
+        break;
+    }
+    if (files) {
+      const configJson = decodeBase64ToString(files.content)
+      result = JSON.parse(configJson)
+    }
+    await deleteAllChats()
+    await insertChats(result)
+    set({ syncState: false })
+    return result
   }
 }))
 

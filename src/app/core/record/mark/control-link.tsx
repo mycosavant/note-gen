@@ -42,6 +42,7 @@ export function ControlLink() {
     // 添加到队列中显示加载状态
     addQueue({
       queueId,
+      tagId: currentTagId!,
       type: 'link',
       progress: '0%',
       startTime: Date.now()
@@ -171,7 +172,7 @@ export function ControlLink() {
       <DialogTrigger asChild>
         <TooltipButton icon={<Link />} tooltipText={t('record.mark.type.link') || '链接'} />
       </DialogTrigger>
-      <DialogContent className="min-w-[500px]">
+      <DialogContent className="min-w-full md:min-w-[500px]">
         <DialogHeader>
           <DialogTitle>{t('record.mark.link.title') || '链接记录'}</DialogTitle>
           <DialogDescription>
