@@ -29,7 +29,7 @@ import useMarkStore from "@/stores/mark"
 import { v4 as uuid } from "uuid"
 import useSettingStore from "@/stores/setting"
 import ocr from "@/lib/ocr"
-import { fetchAiDesc } from "@/lib/ai"
+import { fetchAiDesc, fetchAiDescByImage } from "@/lib/ai"
 import { insertMark } from "@/db/marks"
 
 export function ControlScan() {
@@ -40,7 +40,7 @@ export function ControlScan() {
   const cropperRef = useRef<Cropper | null>(null);
   const { currentTagId, fetchTags, getCurrentTag } = useTagStore()
   const { fetchMarks, addQueue, removeQueue, setQueue } = useMarkStore()
-  const { apiKey } = useSettingStore()
+  const { primaryModel, primaryImageMethod, enableImageRecognition } = useSettingStore()
 
   function initCropper() {
     if (cropperRef.current) {
@@ -70,9 +70,11 @@ export function ControlScan() {
       }
     })
     setFiles(convertedFiles)
-    const image = new window.Image();
-    image.src = convertedFiles[0].path;
-    setImage(image)
+    if (convertedFiles.length > 0) {
+      const image = new window.Image();
+      image.src = convertedFiles[0].path;
+      setImage(image)
+    }
   }
 
   function selectImage(file: ScreenshotImage) {
@@ -93,14 +95,28 @@ export function ControlScan() {
       await writeFile(`screenshot/${queueId}.png`, uint8Array, {
         baseDir: BaseDirectory.AppData
       })
-      addQueue({ queueId, progress: t('record.mark.progress.ocr'), type: 'scan', startTime: Date.now() })
-      const content = await ocr(`screenshot/${queueId}.png`)
+      let content = ''
       let desc = ''
-      if (apiKey) {
-        setQueue(queueId, { progress: t('record.mark.progress.aiAnalysis') });
-        desc = await fetchAiDesc(content).then(res => res ? res : content) || content
-      } else {
+      
+      // Skip image recognition if disabled
+      if (!enableImageRecognition) {
+        addQueue({ queueId, tagId: currentTagId!, progress: t('record.mark.progress.save'), type: 'scan', startTime: Date.now() })
+        content = ''
+        desc = ''
+      } else if (primaryImageMethod === 'vlm') {
+        addQueue({ queueId, tagId: currentTagId!, progress: t('record.mark.progress.aiAnalysis'), type: 'scan', startTime: Date.now() })
+        const base64 = `data:image/png;base64,${Buffer.from(uint8Array).toString('base64')}`
+        content = await fetchAiDescByImage(base64) || 'VLM Error'
         desc = content
+      } else {
+        addQueue({ queueId, tagId: currentTagId!, progress: t('record.mark.progress.ocr'), type: 'scan', startTime: Date.now() })
+        content = await ocr(`screenshot/${queueId}.png`) || 'OCR Error'
+        if (primaryModel) {
+          setQueue(queueId, { progress: t('record.mark.progress.aiAnalysis') });
+          desc = await fetchAiDesc(content).then(res => res ? res : content) || content
+        } else {
+          desc = content
+        }
       }
       setQueue(queueId, { progress: t('record.mark.progress.save') });
       await insertMark({ tagId: currentTagId, type: 'scan', content, url: `${queueId}.png`, desc })
@@ -118,44 +134,46 @@ export function ControlScan() {
   }, [image, open])
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <TooltipButton icon={<ScanText />} tooltipText={t('record.mark.type.screenshot')} onClick={createScreenShot} />
-      </DialogTrigger>
-      <DialogContent className="max-w-screen h-screen text-white bg-black border-none flex flex-col items-center justify-center overflow-hidden">
-        <div className="flex-1 overflow-hidden">
-          {
-            image && (
-              <Image id="cropper" className="size-full object-contain" width={0} height={0} src={image.src} alt="" />
-            )
-          }
-        </div>
-        <Carousel
-          opts={{
-            align: "start",
-          }}
-          orientation="horizontal"
-          className="w-full max-w-xl h-24"
-        >
-          <CarouselContent>
-            {files.map((file, index) => (
-              <CarouselItem key={index} className="pt-1 md:basis-1/5">
-                <Card
-                  className={`size-24 overflow-hidden cursor-pointer border-2 border-black ${image?.src === file.path ? 'border-white' : ''}`}
-                  onClick={() => selectImage(file)}
-                >
-                  <CardContent className="flex relative items-center justify-center p-0 overflow-hidden size-full flex-col">
-                    <Image className="size-full object-cover" src={file.path} alt="" width={200} height={200} />
-                    <p className="text-xs text-white line-clamp-1 text-center absolute bottom-0 left-0 right-0 bg-black bg-opacity-50">{file.name}</p>
-                  </CardContent>
-                </Card>
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-          <CarouselPrevious className="text-white bg-black border-white" />
-          <CarouselNext className="text-white bg-black border-white" />
-        </Carousel>
-      </DialogContent>
-    </Dialog>
+    <div className="hidden md:block">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <TooltipButton icon={<ScanText />} tooltipText={t('record.mark.type.screenshot')} onClick={createScreenShot} />
+        </DialogTrigger>
+        <DialogContent className="max-w-screen h-screen text-white bg-black border-none flex flex-col items-center justify-center overflow-hidden">
+          <div className="flex-1 overflow-hidden">
+            {
+              image && (
+                <Image id="cropper" className="size-full object-contain" width={0} height={0} src={image.src} alt="" />
+              )
+            }
+          </div>
+          <Carousel
+            opts={{
+              align: "start",
+            }}
+            orientation="horizontal"
+            className="w-full max-w-xl h-24"
+          >
+            <CarouselContent>
+              {files.map((file, index) => (
+                <CarouselItem key={index} className="pt-1 md:basis-1/5">
+                  <Card
+                    className={`size-24 overflow-hidden cursor-pointer border-2 border-black ${image?.src === file.path ? 'border-white' : ''}`}
+                    onClick={() => selectImage(file)}
+                  >
+                    <CardContent className="flex relative items-center justify-center p-0 overflow-hidden size-full flex-col">
+                      <Image className="size-full object-cover" src={file.path} alt="" width={200} height={200} />
+                      <p className="text-xs text-white line-clamp-1 text-center absolute bottom-0 left-0 right-0 bg-black bg-opacity-50">{file.name}</p>
+                    </CardContent>
+                  </Card>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            <CarouselPrevious className="text-white bg-black border-white" />
+            <CarouselNext className="text-white bg-black border-white" />
+          </Carousel>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }

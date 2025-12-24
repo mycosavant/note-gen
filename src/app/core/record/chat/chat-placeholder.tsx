@@ -24,11 +24,14 @@ export default function ChatPlaceholder() {
   }
 
   return (
-    <TooltipButton
-      icon={isPlaceholderEnabled ? <Lightbulb className="size-4" /> : <LightbulbOff className="size-4" />}
-      tooltipText={isPlaceholderEnabled ? t('on') : t('off')}
-      size="icon"
-      onClick={togglePlaceholder}
-    />
+    <div>
+      <TooltipButton
+        icon={isPlaceholderEnabled ? <Lightbulb className="size-4" /> : <LightbulbOff className="size-4" />}
+        tooltipText={isPlaceholderEnabled ? t('on') : t('off')}
+        size="icon"
+        side="bottom"
+        onClick={togglePlaceholder}
+      />
+    </div>
   )
 }

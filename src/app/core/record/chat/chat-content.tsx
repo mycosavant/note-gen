@@ -5,8 +5,8 @@ import { useEffect, useState } from 'react'
 import { Chat } from '@/db/chats'
 import ChatPreview from './chat-preview'
 import './chat.scss'
-import { NoteOutput } from './note-output'
-import { MarkText } from './mark-text'
+import { NoteOutput } from './message-control/note-output'
+import { MarkText } from './message-control/mark-text'
 import { ChatClipboard } from './chat-clipboard'
 import MessageControl from './message-control'
 import ChatEmpty from './chat-empty'
@@ -18,9 +18,13 @@ import { Separator } from '@/components/ui/separator'
 import { scrollToBottom } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import emitter from '@/lib/emitter'
+import { RagSources } from './rag-sources'
+import { McpToolCallCard } from './mcp-tool-call'
+import { AgentExecutionStatus } from './agent-execution-status'
+import { AgentHistory } from './agent-history'
 
 export default function ChatContent() {
-  const { chats, init } = useChatStore()
+  const { chats, init, agentState } = useChatStore()
   const { currentTagId } = useTagStore()
   const [isOnBottom, setIsOnBottom] = useState(true)
 
@@ -34,18 +38,28 @@ export default function ChatContent() {
     const md = document.querySelector('#chats-wrapper')
     if (!md) return
     md.addEventListener('scroll', handleScroll)
-    setTimeout(() => scrollToBottom(), 1000)
-    return () => md.removeEventListener('scroll', handleScroll)
+    return () => {
+      md.removeEventListener('scroll', handleScroll)
+    }
   }, [])
-  
+
   useEffect(() => {
     init(currentTagId)
   }, [currentTagId])
 
+  // 监听消息变化，在底部时自动滚动
   useEffect(() => {
-    if (!isOnBottom) return
-    scrollToBottom()
-  }, [chats])
+    if (isOnBottom) {
+      scrollToBottom()
+    }
+  }, [chats, isOnBottom])
+
+  // Agent 执行时自动滚动到底部
+  useEffect(() => {
+    if (agentState.isRunning) {
+      scrollToBottom()
+    }
+  }, [agentState.currentThought, agentState.thoughtHistory, agentState.pendingConfirmation])
 
   return <div id="chats-wrapper" className="flex-1 relative overflow-y-auto overflow-x-hidden w-full flex flex-col items-end p-4 gap-6">
     {
@@ -53,6 +67,9 @@ export default function ChatContent() {
         return <Message key={chat.id} chat={chat} />
       }) : <ChatEmpty />
     }
+    
+    {/* Agent 执行状态 - 在底部实时显示，包裹在 MessageWrapper 中保持布局一致 */}
+    <AgentExecutionStatusWrapper />
     {
       !isOnBottom && <Button variant="outline" className='sticky bottom-0 size-8 right-0' onClick={scrollToBottom}>
         <ArrowDownToLine className='size-4' />
@@ -70,23 +87,11 @@ function MessageWrapper({ chat, children }: { chat: Chat, children: React.ReactN
   }
 
   const index = chats.findIndex(item => item.id === chat.id)
-  if (chat.role === 'system') {
-    return <div className="flex w-full gap-4">
-      {loading && index === chats.length - 1 && chat.type === 'chat' ?
-        <LoaderPinwheel className="animate-spin" /> :
-        chat.type === 'clipboard' ? <ClipboardCheck /> : <BotMessageSquare />
-      }
-      <div className='text-sm leading-6 flex-1 max-w-[calc(100vw-460px)] break-words'>
-        {children}
-      </div>
-    </div>
-  } else {
-    return <div className="flex group items-center gap-4">
-      <div className="bg-primary text-primary-foreground px-4 py-2 rounded-lg max-w-[calc(100vw-600px)]">
-        {chat.content}
-      </div>
+  return <div className="flex w-full md:gap-4">
+    {
+      chat.role === 'user' ?  
       <div className="relative">
-        <Avatar className='rounded size-9 flex items-center justify-center'>
+        <Avatar className='rounded size-6 items-center justify-center hidden md:flex'>
           {
             userInfo?.avatar_url ?
             <AvatarImage src={userInfo?.avatar_url} /> : <UserRound />
@@ -95,18 +100,64 @@ function MessageWrapper({ chat, children }: { chat: Chat, children: React.ReactN
         <Button onClick={revertChat} size="icon" className="absolute top-0 right-0 hidden group-hover:flex">
           <Undo2 />
         </Button>
+      </div> :
+      <div className='hidden md:flex'>
+        {loading && index === chats.length - 1 && chat.type === 'chat' ?
+          <LoaderPinwheel className="animate-spin" /> :
+          chat.type === 'clipboard' ? <ClipboardCheck /> : <BotMessageSquare />
+        }
+      </div>
+    }
+    <div className='text-sm leading-6 flex-1 break-words'>
+      {children}
+    </div>
+  </div>
+}
+
+function AgentExecutionStatusWrapper() {
+  const { agentState } = useChatStore()
+  
+  // 只在 Agent 运行时显示
+  if (!agentState.isRunning) {
+    return null
+  }
+
+  return (
+    <div className="flex w-full md:gap-4">
+      <div className='hidden md:flex'>
+        <LoaderPinwheel className="animate-spin" />
+      </div>
+      <div className='text-sm leading-6 flex-1 break-words'>
+        <AgentExecutionStatus />
       </div>
     </div>
-  }
+  )
 }
 
 function Message({ chat }: { chat: Chat }) {
   const t = useTranslations()
-  const { deleteChat } = useChatStore()
+  const { deleteChat, getMcpToolCallsByChatId, agentState } = useChatStore()
   const content = chat.content?.includes('thinking') ? chat.content.split('<thinking>')[2] : chat.content
 
   const handleRemoveClearContext = () => {
     deleteChat(chat.id)
+  }
+
+  // 解析 RAG 引用的文件名
+  const ragSources = chat.ragSources ? (() => {
+    try {
+      return JSON.parse(chat.ragSources) as string[]
+    } catch {
+      return []
+    }
+  })() : []
+  
+  // 获取该消息关联的 MCP 工具调用
+  const mcpToolCalls = getMcpToolCallsByChatId(chat.id)
+  
+  // 如果是空内容的 AI 消息且 Agent 正在运行，不显示（避免双头像）
+  if (chat.role === 'system' && !chat.content && agentState.isRunning) {
+    return null
   }
 
   switch (chat.type) {
@@ -147,11 +198,27 @@ function Message({ chat }: { chat: Chat }) {
 
     default:
       return <MessageWrapper chat={chat}>
-        <ChatThinking chat={chat} />
-        <ChatPreview text={content || ''} />
-        <MessageControl chat={chat}>
-          <MarkText chat={chat} />
-        </MessageControl>
+        <div className="w-full">
+          {/* Agent 执行历史 - 显示保存的历史记录 */}
+          {chat.role === 'system' && chat.agentHistory && (
+            <AgentHistory historyJson={chat.agentHistory} />
+          )}
+          
+          {/* MCP 工具调用展示 */}
+          {mcpToolCalls.length > 0 && (
+            <div className="space-y-4 mb-4">
+              {mcpToolCalls.map(toolCall => (
+                <McpToolCallCard key={toolCall.id} toolCall={toolCall} />
+              ))}
+            </div>
+          )}
+          <ChatThinking chat={chat} />
+          <ChatPreview text={content || ''} />
+          {chat.role === 'system' && <RagSources sources={ragSources} />}
+          <MessageControl chat={chat}>
+            {chat.role !== 'user' && <MarkText chat={chat} />}
+          </MessageControl>
+        </div>
       </MessageWrapper>
   }
 }

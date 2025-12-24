@@ -1,23 +1,13 @@
-import { GithubRepoInfo, UserInfo } from '@/lib/github.types'
-import { GiteeRepoInfo } from '@/lib/gitee'
+import { GithubRepoInfo, UserInfo, SyncStateEnum } from '@/lib/sync/github.types'
+import { GiteeRepoInfo } from '@/lib/sync/gitee'
+import { GitlabUserInfo, GitlabProjectInfo } from '@/lib/sync/gitlab.types'
+import { GiteaUserInfo, GiteaRepositoryInfo } from '@/lib/sync/gitea.types'
 import { create } from 'zustand'
-
-export enum SyncStateEnum {
-  checking = '检测中',
-  success = '可用',
-  creating = '创建中',
-  fail = '不可用',
-}
 
 interface SyncState {
   // Github 相关状态
   userInfo?: UserInfo
   setUserInfo: (userInfo?: UserInfo) => void
-
-  imageRepoState: SyncStateEnum
-  setImageRepoState: (imageRepoState: SyncStateEnum) => void
-  imageRepoInfo?: GithubRepoInfo
-  setImageRepoInfo: (imageRepoInfo?: GithubRepoInfo) => void
 
   syncRepoState: SyncStateEnum
   setSyncRepoState: (syncRepoState: SyncStateEnum) => void
@@ -32,6 +22,24 @@ interface SyncState {
   setGiteeSyncRepoState: (giteeSyncRepoState: SyncStateEnum) => void
   giteeSyncRepoInfo?: GiteeRepoInfo
   setGiteeSyncRepoInfo: (giteeSyncRepoInfo?: GiteeRepoInfo) => void
+
+  // Gitlab 相关状态
+  gitlabUserInfo?: GitlabUserInfo
+  setGitlabUserInfo: (gitlabUserInfo?: GitlabUserInfo) => void
+
+  gitlabSyncProjectState: SyncStateEnum
+  setGitlabSyncProjectState: (gitlabSyncProjectState: SyncStateEnum) => void
+  gitlabSyncProjectInfo?: GitlabProjectInfo
+  setGitlabSyncProjectInfo: (gitlabSyncProjectInfo?: GitlabProjectInfo) => void
+
+  // Gitea 相关状态
+  giteaUserInfo?: GiteaUserInfo
+  setGiteaUserInfo: (giteaUserInfo?: GiteaUserInfo) => void
+
+  giteaSyncRepoState: SyncStateEnum
+  setGiteaSyncRepoState: (giteaSyncRepoState: SyncStateEnum) => void
+  giteaSyncRepoInfo?: GiteaRepositoryInfo
+  setGiteaSyncRepoInfo: (giteaSyncRepoInfo?: GiteaRepositoryInfo) => void
 }
 
 const useSyncStore = create<SyncState>((set) => ({
@@ -39,15 +47,6 @@ const useSyncStore = create<SyncState>((set) => ({
   userInfo: undefined,
   setUserInfo: (userInfo) => {
     set({ userInfo })
-  },
-
-  imageRepoState: SyncStateEnum.fail,
-  setImageRepoState: (imageRepoState) => {
-    set({ imageRepoState })
-  },
-  imageRepoInfo: undefined,
-  setImageRepoInfo: (imageRepoInfo) => {
-    set({ imageRepoInfo })
   },
 
   syncRepoState: SyncStateEnum.fail,
@@ -72,6 +71,36 @@ const useSyncStore = create<SyncState>((set) => ({
   giteeSyncRepoInfo: undefined,
   setGiteeSyncRepoInfo: (giteeSyncRepoInfo) => {
     set({ giteeSyncRepoInfo })
+  },
+
+  // Gitlab 相关状态
+  gitlabUserInfo: undefined,
+  setGitlabUserInfo: (gitlabUserInfo) => {
+    set({ gitlabUserInfo })
+  },
+
+  gitlabSyncProjectState: SyncStateEnum.fail,
+  setGitlabSyncProjectState: (gitlabSyncProjectState) => {
+    set({ gitlabSyncProjectState })
+  },
+  gitlabSyncProjectInfo: undefined,
+  setGitlabSyncProjectInfo: (gitlabSyncProjectInfo) => {
+    set({ gitlabSyncProjectInfo })
+  },
+
+  // Gitea 相关状态
+  giteaUserInfo: undefined,
+  setGiteaUserInfo: (giteaUserInfo) => {
+    set({ giteaUserInfo })
+  },
+
+  giteaSyncRepoState: SyncStateEnum.fail,
+  setGiteaSyncRepoState: (giteaSyncRepoState) => {
+    set({ giteaSyncRepoState })
+  },
+  giteaSyncRepoInfo: undefined,
+  setGiteaSyncRepoInfo: (giteaSyncRepoInfo) => {
+    set({ giteaSyncRepoInfo })
   },
 }))
 

@@ -1,19 +1,23 @@
 'use client'
 import { Input } from "@/components/ui/input";
-import { FormItem, SettingPanel, SettingRow } from "../components/setting-base";
-import { useEffect } from "react";
+import { FormItem } from "../components/setting-base";
+import { Item, ItemContent, ItemTitle, ItemDescription, ItemActions, ItemMedia } from '@/components/ui/item';
+import { useEffect, useState } from "react";
 import { useTranslations } from 'next-intl';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import useSettingStore from "@/stores/setting";
 import { Store } from "@tauri-apps/plugin-store";
-import useSyncStore, { SyncStateEnum } from "@/stores/sync";
+import useSyncStore from "@/stores/sync";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { OpenBroswer } from "@/components/open-broswer";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { checkSyncRepoState, createSyncRepo, getUserInfo } from "@/lib/sync/github";
+import { RepoNames, SyncStateEnum } from "@/lib/sync/github.types";
+import { DatabaseBackup, Eye, EyeOff, Plus, RefreshCcw } from "lucide-react";
+import { Avatar, AvatarImage } from "@/components/ui/avatar";
 
 dayjs.extend(relativeTime)
 
@@ -21,32 +25,75 @@ export function GithubSync() {
   const t = useTranslations();
   const { accessToken,
     setAccessToken,
-    useImageRepo,
-    setUseImageRepo,
-    jsdelivr,
-    setJsdelivr,
     autoSync,
     setAutoSync,
     primaryBackupMethod,
-    setPrimaryBackupMethod
+    setPrimaryBackupMethod,
+    githubCustomSyncRepo,
+    setGithubCustomSyncRepo
   } = useSettingStore()
   const {
-    imageRepoState,
-    setImageRepoState,
     syncRepoState,
     setSyncRepoState,
-    imageRepoInfo,
     syncRepoInfo,
-    setImageRepoInfo,
     setSyncRepoInfo
   } = useSyncStore()
+
+  const [accessTokenVisible, setAccessTokenVisible] = useState<boolean>(false)
+
+  // 获取实际使用的仓库名称
+  const getRepoName = () => {
+    return githubCustomSyncRepo.trim() || RepoNames.sync
+  }
+
+  // 检查 GitHub 仓库状态（仅检查，不创建）
+
+  async function checkGithubRepos() {
+    try {
+      setSyncRepoState(SyncStateEnum.checking)
+      // 先清空之前的仓库信息
+      setSyncRepoInfo(undefined)
+      
+      await getUserInfo();
+      const repoName = getRepoName()
+      const syncRepo = await checkSyncRepoState(repoName)
+      
+      if (syncRepo) {
+        setSyncRepoInfo(syncRepo)
+        setSyncRepoState(SyncStateEnum.success)
+      } else {
+        setSyncRepoInfo(undefined)
+        setSyncRepoState(SyncStateEnum.fail)
+      }
+    } catch (err) {
+      console.error('Failed to check GitHub repos:', err)
+      setSyncRepoInfo(undefined)
+      setSyncRepoState(SyncStateEnum.fail)
+    }
+  }
+
+  // 手动创建仓库
+  async function createGithubRepo() {
+    try {
+      setSyncRepoState(SyncStateEnum.creating)
+      const repoName = getRepoName()
+      const info = await createSyncRepo(repoName, true)
+      if (info) {
+        setSyncRepoInfo(info)
+        setSyncRepoState(SyncStateEnum.success)
+      } else {
+        setSyncRepoState(SyncStateEnum.fail)
+      }
+    } catch (err) {
+      console.error('Failed to create GitHub repo:', err)
+      setSyncRepoState(SyncStateEnum.fail)
+    }
+  }
 
   async function tokenChangeHandler(e: React.ChangeEvent<HTMLInputElement>) {
     const value = e.target.value
     if (value === '') {
-      setImageRepoState(SyncStateEnum.fail)
       setSyncRepoState(SyncStateEnum.fail)
-      setImageRepoInfo(undefined)
       setSyncRepoInfo(undefined)
     }
     setAccessToken(value)
@@ -67,106 +114,116 @@ export function GithubSync() {
     init()
   }, [])
 
+
   return (
-    <>
-      <SettingRow>
-        <FormItem title="Github Access Token" desc={t('settings.sync.newTokenDesc')}>
-          <OpenBroswer url="https://github.com/settings/tokens/new" title={t('settings.sync.newToken')} className="mb-2" />
-          <Input value={accessToken} onChange={tokenChangeHandler} />
-        </FormItem>
-      </SettingRow>
-      <SettingRow>
-        <FormItem title={t('settings.sync.repoStatus')}>
-          <div className="grid grid-cols-2 gap-4">
-            <Card>
-              <CardHeader className={`${syncRepoInfo ? 'border-b' : ''}`}>
-                <CardTitle className="flex justify-between items-center">
-                  <span>{t('settings.sync.syncRepo')}（{ syncRepoInfo?.private ? t('settings.sync.private') : t('settings.sync.public') }）</span>
-                  <Badge className={`${syncRepoState === SyncStateEnum.success ? 'bg-green-800' : 'bg-red-800'}`}>{syncRepoState}</Badge>
-                </CardTitle>
-                <CardDescription>{t('settings.sync.syncRepoDesc')}</CardDescription>
-              </CardHeader>
-              {
-                syncRepoInfo &&
-                <CardContent>
-                  <h3 className="text-xl font-bold mt-4 mb-2">
-                    <OpenBroswer title={syncRepoInfo?.full_name || ''} url={syncRepoInfo?.html_url || ''} />
-                  </h3>
-                  <CardDescription className="flex">
-                    <p className="text-zinc-500 leading-6">{t('settings.sync.createdAt', { time: dayjs(syncRepoInfo?.created_at).fromNow() })}，</p>
-                    <p className="text-zinc-500 leading-6">{t('settings.sync.updatedAt', { time: dayjs(syncRepoInfo?.updated_at).fromNow() })}。</p>
-                  </CardDescription>
-                </CardContent>
-              }
-            </Card>
-            <Card>
-              <CardHeader className={`${imageRepoInfo ? 'border-b' : ''}`}>
-                <CardTitle className="flex justify-between items-center">
-                  <span>{t('settings.sync.imageRepo')} （{ imageRepoInfo?.private ? t('settings.sync.private') : t('settings.sync.public') }）</span>
-                  <Badge className={`${imageRepoState === SyncStateEnum.success ? 'bg-green-800' : 'bg-red-800'}`}>{imageRepoState}</Badge>
-                </CardTitle>
-                <CardDescription>{t('settings.sync.imageRepoDesc')}</CardDescription>
-              </CardHeader>
-              {
-                imageRepoInfo &&
-                <CardContent>
-                  <h3 className="text-xl font-bold mt-4 mb-2">
-                    <OpenBroswer title={imageRepoInfo?.full_name || ''} url={imageRepoInfo?.html_url || ''} />
-                  </h3>
-                  <CardDescription className="flex">
-                    <p className="text-zinc-500 leading-6">{t('settings.sync.createdAt', { time: dayjs(imageRepoInfo?.created_at).fromNow() })}，</p>
-                    <p className="text-zinc-500 leading-6">{t('settings.sync.updatedAt', { time: dayjs(imageRepoInfo?.updated_at).fromNow() })}。</p>
-                  </CardDescription>
-                </CardContent>
-              }
-            </Card>
-          </div>
-        </FormItem>
-      </SettingRow>
+    <div className="space-y-8">
+      <FormItem title="Github Access Token" desc={t('settings.sync.newTokenDesc')}>
+        <OpenBroswer url="https://github.com/settings/tokens/new" title={t('settings.sync.newToken')} className="mb-2" />
+        <div className="flex gap-2">
+          <Input value={accessToken} onChange={tokenChangeHandler} type={accessTokenVisible ? 'text' : 'password'} />
+          <Button variant="outline" size="icon" onClick={() => setAccessTokenVisible(!accessTokenVisible)}>
+            {accessTokenVisible ? <Eye /> : <EyeOff />}
+          </Button>
+        </div>
+      </FormItem>
+      <FormItem title={t('settings.sync.customSyncRepo')} desc={t('settings.sync.customSyncRepoDesc')}>
+        <Input 
+          value={githubCustomSyncRepo} 
+          onChange={(e) => {
+            setGithubCustomSyncRepo(e.target.value)
+          }}
+          placeholder={RepoNames.sync}
+        />
+      </FormItem>
+      <FormItem title={t('settings.sync.repoStatus')}>
+        <Card>
+          <CardHeader className={`${syncRepoInfo ? 'border-b' : ''}`}>
+            <CardTitle className="flex justify-between items-center">
+              <div className="flex gap-2 items-center">
+                <DatabaseBackup className="size-4" />
+                {getRepoName()}（{ syncRepoInfo?.private === false ? t('settings.sync.public') : t('settings.sync.private') }）
+              </div>
+              <Badge className={`${syncRepoState === SyncStateEnum.success ? 'bg-green-800' : 'bg-red-800'}`}>{syncRepoState}</Badge>
+            </CardTitle>
+            <CardDescription>
+              <span>{t('settings.sync.syncRepoDesc')}</span>
+            </CardDescription>
+            {/* 手动检测和创建按钮 */}
+            {accessToken && (
+              <div className="mt-3 flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={checkGithubRepos}
+                  disabled={syncRepoState === SyncStateEnum.checking}
+                >
+                  <RefreshCcw className="size-4 mr-1" />
+                  {syncRepoState === SyncStateEnum.checking ? t('settings.sync.checking') : t('settings.sync.checkRepo')}
+                </Button>
+                {syncRepoState === SyncStateEnum.fail && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={createGithubRepo}
+                  >
+                    <Plus className="size-4 mr-1" />
+                    {t('settings.sync.createRepo')}
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardHeader>
+          {
+            syncRepoInfo &&
+            <CardContent className="flex items-center gap-4 mt-4">
+              <Avatar className="size-12"  >
+                <AvatarImage src={syncRepoInfo?.owner.avatar_url || ''} />
+              </Avatar>
+              <div>
+                <h3 className="text-xl font-bold mb-1">
+                  <OpenBroswer title={syncRepoInfo?.full_name || ''} url={syncRepoInfo?.html_url || ''} />
+                </h3>
+                <CardDescription className="flex">
+                  <p className="text-zinc-500 leading-6">{t('settings.sync.createdAt', { time: dayjs(syncRepoInfo?.created_at).fromNow() })}，</p>
+                  <p className="text-zinc-500 leading-6">{t('settings.sync.updatedAt', { time: dayjs(syncRepoInfo?.updated_at).fromNow() })}。</p>
+                </CardDescription>
+              </div>
+            </CardContent>
+          }
+        </Card>
+      </FormItem>
       {
         syncRepoInfo &&
-        <>
-          <SettingPanel title="自动同步" desc="选择编辑器在输入停止后自动同步的时间间隔">
-            <Select
-              value={autoSync}
-              onValueChange={(value) => setAutoSync(value)}
-              disabled={!accessToken || syncRepoState !== SyncStateEnum.success}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder={t('settings.sync.autoSyncOptions.placeholder')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="disabled">{t('settings.sync.autoSyncOptions.disabled')}</SelectItem>
-                <SelectItem value="10">{t('settings.sync.autoSyncOptions.10s')}</SelectItem>
-                <SelectItem value="30">{t('settings.sync.autoSyncOptions.30s')}</SelectItem>
-                <SelectItem value="60">{t('settings.sync.autoSyncOptions.1m')}</SelectItem>
-                <SelectItem value="300">{t('settings.sync.autoSyncOptions.5m')}</SelectItem>
-                <SelectItem value="1800">{t('settings.sync.autoSyncOptions.30m')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </SettingPanel>
-        </>
+        <FormItem title={t('settings.others')}>
+          <Item variant="outline">
+            <ItemMedia variant="icon"><RefreshCcw className="size-4" /></ItemMedia>
+            <ItemContent>
+              <ItemTitle>{t('settings.sync.autoSync')}</ItemTitle>
+              <ItemDescription>{t('settings.sync.autoSyncDesc')}</ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <Select
+                value={autoSync}
+                onValueChange={(value) => setAutoSync(value)}
+                disabled={!accessToken || syncRepoState !== SyncStateEnum.success}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder={t('settings.sync.autoSyncOptions.placeholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="disabled">{t('settings.sync.autoSyncOptions.disabled')}</SelectItem>
+                  <SelectItem value="10">{t('settings.sync.autoSyncOptions.10s')}</SelectItem>
+                  <SelectItem value="30">{t('settings.sync.autoSyncOptions.30s')}</SelectItem>
+                  <SelectItem value="60">{t('settings.sync.autoSyncOptions.1m')}</SelectItem>
+                  <SelectItem value="300">{t('settings.sync.autoSyncOptions.5m')}</SelectItem>
+                  <SelectItem value="1800">{t('settings.sync.autoSyncOptions.30m')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </ItemActions>
+          </Item>
+        </FormItem>
       }
-      {
-        imageRepoInfo &&
-        <>
-          <SettingPanel title={t('settings.sync.imageRepoSetting')} desc={t('settings.sync.imageRepoSettingDesc')}>
-            <Switch 
-              checked={useImageRepo} 
-              onCheckedChange={(checked) => setUseImageRepo(checked)} 
-              disabled={!accessToken || imageRepoState !== SyncStateEnum.success}
-            />
-          </SettingPanel>
-          <SettingPanel title={t('settings.sync.jsdelivrSetting')} desc={t('settings.sync.jsdelivrSettingDesc')}>
-            <Switch 
-              checked={jsdelivr} 
-              onCheckedChange={(checked) => setJsdelivr(checked)} 
-              disabled={!accessToken || imageRepoState !== SyncStateEnum.success || !useImageRepo}
-            />
-          </SettingPanel>
-        </>
-      }
-      <SettingRow className="mb-4">
+      <div>
         {primaryBackupMethod === 'github' ? (
           <Button disabled variant="outline">
             {t('settings.sync.isPrimaryBackup', { type: 'Github' })}
@@ -180,7 +237,7 @@ export function GithubSync() {
             {t('settings.sync.setPrimaryBackup')}
           </Button>
         )}
-      </SettingRow>
-    </>
+      </div>
+    </div>
   )
 }

@@ -2,15 +2,26 @@ import { TooltipButton } from "@/components/tooltip-button"
 import { FilePlus } from "lucide-react"
 import { useTranslations } from 'next-intl'
 import { open } from '@tauri-apps/plugin-dialog';
-import { readTextFile, readFile } from "@tauri-apps/plugin-fs";
+import { readTextFile } from "@tauri-apps/plugin-fs";
 import useTagStore from "@/stores/tag";
 import useMarkStore from "@/stores/mark";
 import { insertMark } from "@/db/marks";
-import { getDocument } from 'pdfjs-dist'
-import "pdfjs-dist/build/pdf.worker.mjs";
 
+// 常见的代码格式
+const codeExtensions = [
+  // Web开发
+  'js', 'jsx', 'ts', 'tsx', 'html', 'css', 'scss', 'sass', 'less', 'vue', 'svelte', 'php', 'mjs', 'mts',
+  // 编程语言
+  'py', 'java', 'cpp', 'c', 'cs', 'go', 'rb', 'rs', 'swift', 'kt', 'scala', 'dart', 'lua', 'r',
+  // 标记/配置
+  'json', 'xml', 'yaml', 'yml', 'toml', 'ini', 'graphql', 'sql',
+  // Shell脚本
+  'sh', 'bash', 'zsh', 'fish', 'ps1',
+  // 其他
+  'asm', 'pl', 'clj', 'ex', 'elm', 'f90', 'hs', 'jl', 'swift', 'ml'
+];
 const textFileExtensions = ['txt', 'md', 'csv'];
-const fileExtensions = ['pdf']
+const fileExtensions: string[] = []
 
 export function ControlFile() {
   const t = useTranslations();
@@ -23,7 +34,7 @@ export function ControlFile() {
       directory: false,
       filters: [{
         name: 'files',
-        extensions: [...textFileExtensions, ...fileExtensions]
+        extensions: [...textFileExtensions, ...fileExtensions, ...codeExtensions]
       }]
     });
     if (!filePath) return
@@ -32,36 +43,25 @@ export function ControlFile() {
 
   async function readFileByPath(path: string) {
     const ext = path.substring(path.lastIndexOf('.') + 1)
-    if (textFileExtensions.includes(ext)) {
+    if ([...textFileExtensions, ...codeExtensions].includes(ext)) {
       const content = await readTextFile(path)
+      // 提取文件名（不含路径）
+      const fileName = path.split('/').pop() || path.split('\\').pop() || path
+      // 构建描述：文件名
+      const desc = fileName
+      // 内容保持原样，不添加文件名
       const resetText = content.replace(/'/g, '')
-      await insertMark({ tagId: currentTagId, type: 'file', desc: resetText, content: resetText })
+      // 将完整路径存储在 url 字段，用于点击时打开文件夹
+      await insertMark({ 
+        tagId: currentTagId, 
+        type: 'file', 
+        desc: desc, 
+        content: resetText,
+        url: path 
+      })
       await fetchMarks()
       await fetchTags()
       getCurrentTag()
-    }
-    if (ext === 'pdf') {
-      const file = await readFile(path)
-      getDocument(file).promise.then(pdf => {
-        const numPages = pdf.numPages;
-        for (let i = 1; i <= numPages; i++) {
-          pdf.getPage(i).then(page => {
-            page.getTextContent().then(content => {
-              const text = content.items.map(item => {
-                if ('str' in item) {
-                  return item.str
-                }
-                return ''
-              }).join('');
-              if (!text) return
-              insertMark({ tagId: currentTagId, type: 'file', desc: text, content: text })
-              fetchMarks()
-              fetchTags()
-              getCurrentTag()
-            });
-          });
-        }
-      })
     }
   }
 

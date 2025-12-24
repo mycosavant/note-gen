@@ -5,7 +5,9 @@ node_modules
 
 ./dist
 dist-ssr
+src-tauri/gen
 *.local
+target/*
 
 /.pnp
 .pnp.*
@@ -46,3 +48,4 @@ next-env.d.ts
 docs/.vitepress/dist
 docs/.vitepress/cache
 
+.idea
