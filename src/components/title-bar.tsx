@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react'
 import { platform } from '@tauri-apps/plugin-os'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { isMobileDevice } from '@/lib/check'
-import { Search, Settings, Minus, Square, X, PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, Cog } from 'lucide-react'
-import { usePathname, useRouter } from 'next/navigation'
+import { Search, Settings, Minus, Square, X, PanelLeft, PanelRight, SquarePen, Cog, CalendarDays } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useSidebarStore } from '@/stores/sidebar'
 import { PinToggle } from './pin-toggle'
@@ -15,29 +14,69 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Button } from '@/components/ui/button'
 import useSettingStore from '@/stores/setting'
 import useArticleStore from '@/stores/article'
+import useUpdateStore from '@/stores/update'
 import React from 'react'
-import { ControlText } from '@/app/core/record/mark/control-text'
-import { ControlRecording } from '@/app/core/record/mark/control-recording'
-import { ControlScan } from '@/app/core/record/mark/control-scan'
-import { ControlImage } from '@/app/core/record/mark/control-image'
-import { ControlLink } from '@/app/core/record/mark/control-link'
-import { ControlFile } from '@/app/core/record/mark/control-file'
+import { ControlText } from '@/app/core/main/mark/control-text'
+import { ControlRecording } from '@/app/core/main/mark/control-recording'
+import { ControlScan } from '@/app/core/main/mark/control-scan'
+import { ControlImage } from '@/app/core/main/mark/control-image'
+import { ControlLink } from '@/app/core/main/mark/control-link'
+import { ControlFile } from '@/app/core/main/mark/control-file'
+import { ControlTodo } from '@/app/core/main/mark/control-todo'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  horizontalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { DraggableToolbarItem } from './draggable-toolbar-item'
+import { useToolbarShortcuts } from '@/hooks/use-toolbar-shortcuts'
+import { useSettingsDialogStore } from '@/stores/settings-dialog'
 
 type Platform = 'macos' | 'windows' | 'linux' | 'unknown'
 
 interface TitleBarProps {
   onSearchClick?: () => void
+  onActivityClick?: () => void
+  activityOpen?: boolean
 }
 
-export function TitleBar({ onSearchClick }: TitleBarProps) {
+export function TitleBar({ onSearchClick, onActivityClick, activityOpen = false }: TitleBarProps) {
   const [currentPlatform, setCurrentPlatform] = useState<Platform>('unknown')
   const [isMobile, setIsMobile] = useState(true)
-  const pathname = usePathname()
-  const router = useRouter()
-  const { leftSidebarVisible, rightSidebarVisible, toggleLeftSidebar, toggleRightSidebar } = useSidebarStore()
-  const { recordToolbarConfig } = useSettingStore()
+  const { open: settingsOpen, openSettings, closeSettings } = useSettingsDialogStore()
+  const { leftSidebarVisible, centerPanelVisible, rightSidebarVisible, toggleLeftSidebar, toggleCenterPanel, toggleRightSidebar } = useSidebarStore()
+  
+  // 检查关闭面板后是否会导致"仅左"状态或无面板状态
+  const wouldCauseLeftOnly = (currentVisible: boolean, panel: 'left' | 'center' | 'right') => {
+    // 如果面板本来就不可见，不会导致问题（打开面板总是允许的）
+    if (!currentVisible) return false
+    
+    const visibleCount = [leftSidebarVisible, centerPanelVisible, rightSidebarVisible].filter(Boolean).length
+    
+    if (visibleCount === 1) return true // 不允许关闭最后一个面板
+    
+    if (visibleCount === 2) {
+      // 只有当关闭中间或右侧面板会导致"仅左"状态时才阻止
+      if (panel === 'center' && leftSidebarVisible && !rightSidebarVisible) return true
+      if (panel === 'right' && leftSidebarVisible && !centerPanelVisible) return true
+      // 关闭左侧面板不会导致"仅左"状态（它会变成"仅中"或"仅右"），所以允许
+    }
+    
+    return false
+  }
+  const { recordToolbarConfig, setRecordToolbarConfig } = useSettingStore()
   const { activeFilePath } = useArticleStore()
+  const { hasUpdate } = useUpdateStore()
   const t = useTranslations()
+  const { isModifierPressed } = useToolbarShortcuts()
 
   const getFileName = () => {
     if (!activeFilePath) return ''
@@ -47,6 +86,33 @@ export function TitleBar({ onSearchClick }: TitleBarProps) {
 
   const searchPlaceholder = getFileName() || t('navigation.searchPlaceholder')
 
+
+  // 拖拽传感器配置
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    })
+  )
+
+  // 处理拖拽结束
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      const oldIndex = recordToolbarConfig.findIndex((item) => item.id === active.id)
+      const newIndex = recordToolbarConfig.findIndex((item) => item.id === over.id)
+      
+      const newItems = arrayMove(recordToolbarConfig, oldIndex, newIndex)
+      const updatedItems = newItems.map((item, index) => ({
+        ...item,
+        order: index
+      }))
+      setRecordToolbarConfig(updatedItems)
+    }
+  }
 
   useEffect(() => {
     // 检查是否为移动设备
@@ -112,7 +178,7 @@ export function TitleBar({ onSearchClick }: TitleBarProps) {
   return (
     <TooltipProvider>
       <div
-        className="h-[36px] w-full flex flex-nowrap items-center select-none shrink-0 fixed top-0 left-0 right-0 z-[9999] border-b bg-background"
+        className="fixed top-0 right-0 left-0 z-40 flex h-[36px] w-full shrink-0 flex-nowrap items-center border-b bg-background select-none"
         style={{
           // macOS 红绿灯按钮在左侧，需要留出空间（约 70px）
           paddingLeft: isMacOS ? '70px' : '0',
@@ -120,34 +186,62 @@ export function TitleBar({ onSearchClick }: TitleBarProps) {
         data-tauri-drag-region
       >
         {/* 左侧记录工具栏按钮 */}
-        <div className="flex items-center gap-0.5 px-2 shrink-0" data-tauri-drag-region="false">
+        <div id="onboarding-target-record-toolbar" className="flex items-center gap-0.5 px-2 shrink-0" data-tauri-drag-region="false">
           <TooltipProvider>
-            {recordToolbarConfig
-              .filter(item => item.enabled)
-              .sort((a, b) => a.order - b.order)
-              .map(item => {
-                switch (item.id) {
-                  case 'text':
-                    return <ControlText key={item.id} />
-                  case 'recording':
-                    return <ControlRecording key={item.id} />
-                  case 'scan':
-                    return <ControlScan key={item.id} />
-                  case 'image':
-                    return <ControlImage key={item.id} />
-                  case 'link':
-                    return <ControlLink key={item.id} />
-                  case 'file':
-                    return <ControlFile key={item.id} />
-                  default:
-                    return null
-                }
-              })}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={recordToolbarConfig.filter(item => item.enabled).map(item => item.id)}
+                strategy={horizontalListSortingStrategy}
+              >
+                <div className="flex">
+                  {recordToolbarConfig
+                    .filter(item => item.enabled)
+                    .sort((a, b) => a.order - b.order)
+                    .map((item, index) => {
+                      const renderToolbarItem = () => {
+                        switch (item.id) {
+                          case 'text':
+                            return <ControlText />
+                          case 'recording':
+                            return <ControlRecording />
+                          case 'scan':
+                            return <ControlScan />
+                          case 'image':
+                            return <ControlImage />
+                          case 'link':
+                            return <ControlLink />
+                          case 'file':
+                            return <ControlFile />
+                          case 'todo':
+                            return <ControlTodo />
+                          default:
+                            return null
+                        }
+                      }
+                      
+                      return (
+                        <DraggableToolbarItem
+                          key={item.id}
+                          id={item.id}
+                          shortcutNumber={index + 1}
+                          showShortcut={isModifierPressed && index < 9}
+                        >
+                          {renderToolbarItem()}
+                        </DraggableToolbarItem>
+                      )
+                    })}
+                </div>
+              </SortableContext>
+            </DndContext>
           </TooltipProvider>
         </div>
 
         {/* 中间搜索输入框 */}
-        <div className="flex-1 flex items-center justify-center px-4 min-w-[200px] max-w-[600px] mx-auto">
+        <div className="flex-1 flex items-center justify-center px-4 min-w-[200px] max-w-[600px] mx-auto" data-tauri-drag-region>
           <div 
             className="relative w-full h-6 max-w-md group cursor-pointer flex justify-center items-center border rounded-sm"
             onClick={() => onSearchClick?.()}
@@ -168,14 +262,39 @@ export function TitleBar({ onSearchClick }: TitleBarProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
-                onClick={toggleLeftSidebar}
+                className={`h-8 w-8 ${wouldCauseLeftOnly(leftSidebarVisible, 'left') ? 'cursor-not-allowed opacity-50' : ''}`}
+                onClick={() => {
+                  if (!wouldCauseLeftOnly(leftSidebarVisible, 'left')) {
+                    toggleLeftSidebar()
+                  }
+                }}
               >
-                {leftSidebarVisible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+                <PanelLeft className={`h-4 w-4 ${!leftSidebarVisible ? 'opacity-30' : ''}`} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
               <p>{leftSidebarVisible ? t('navigation.hideLeftSidebar') : t('navigation.showLeftSidebar')}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          {/* 中间面板切换按钮 */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-8 w-8 ${wouldCauseLeftOnly(centerPanelVisible, 'center') ? 'cursor-not-allowed opacity-50' : ''}`}
+                onClick={() => {
+                  if (!wouldCauseLeftOnly(centerPanelVisible, 'center')) {
+                    toggleCenterPanel()
+                  }
+                }}
+              >
+                <SquarePen className={`h-4 w-4 ${!centerPanelVisible ? 'opacity-30' : ''}`} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>{centerPanelVisible ? t('navigation.hideCenterPanel') : t('navigation.showCenterPanel')}</p>
             </TooltipContent>
           </Tooltip>
 
@@ -185,10 +304,14 @@ export function TitleBar({ onSearchClick }: TitleBarProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
-                onClick={toggleRightSidebar}
+                className={`h-8 w-8 ${wouldCauseLeftOnly(rightSidebarVisible, 'right') ? 'cursor-not-allowed opacity-50' : ''}`}
+                onClick={() => {
+                  if (!wouldCauseLeftOnly(rightSidebarVisible, 'right')) {
+                    toggleRightSidebar()
+                  }
+                }}
               >
-                {rightSidebarVisible ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
+                <PanelRight className={`h-4 w-4 ${!rightSidebarVisible ? 'opacity-30' : ''}`} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
@@ -196,6 +319,22 @@ export function TitleBar({ onSearchClick }: TitleBarProps) {
             </TooltipContent>
           </Tooltip>
           
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-8 w-8 ${activityOpen ? 'bg-primary/10 text-primary hover:bg-primary/15' : ''}`}
+                onClick={onActivityClick}
+              >
+                <CalendarDays className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>{t('navigation.activity')}</p>
+            </TooltipContent>
+          </Tooltip>
+
           <SyncToggle />
           
           <PinToggle />
@@ -205,28 +344,25 @@ export function TitleBar({ onSearchClick }: TitleBarProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className={`h-8 w-8 ${pathname.includes('/core/setting') ? 'bg-accent' : ''}`}
-                onClick={() => {
-                  if (pathname.includes('/core/setting')) {
-                    router.push('/core/main')
-                  } else {
-                    router.push('/core/setting')
-                  }
-                }}
+                className={`h-8 w-8 relative ${settingsOpen ? 'bg-primary/50 hover:bg-primary/60' : ''}`}
+                onClick={() => settingsOpen ? closeSettings() : openSettings()}
               >
-                {pathname.includes('/core/setting') ? (
+                {settingsOpen ? (
                   <Cog className="h-4 w-4" />
                 ) : (
                   <Settings className="h-4 w-4" />
                 )}
+                {hasUpdate && !settingsOpen && (
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500" />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              <p>{pathname.includes('/core/setting') ? t('common.back') : t('common.settings')}</p>
+              <p>{settingsOpen ? t('common.back') : t('common.settings')}</p>
             </TooltipContent>
           </Tooltip>
           
-          <AppStatus inTitlebar />
+          <AppStatus />
         </div>
 
         {/* Windows 控制按钮 */}

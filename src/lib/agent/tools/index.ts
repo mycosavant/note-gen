@@ -1,44 +1,47 @@
-import { Tool } from '../types'
-import { noteTools } from './note-tools'
-import { chatTools } from './chat-tools'
-import { tagTools } from './tag-tools'
-import { markTools } from './mark-tools'
-import { folderTools } from './folder-tools'
+import { agentToolRegistry } from '../tool-registry'
+import type { AgentTool } from '../types'
 
-export const allTools: Tool[] = [
-  ...noteTools,
-  ...chatTools,
-  ...tagTools,
-  ...markTools,
-  ...folderTools,
-]
-
-export function getToolByName(name: string): Tool | undefined {
-  return allTools.find(tool => tool.name === name)
+export function getAllTools(): AgentTool[] {
+  return agentToolRegistry.listTools()
 }
 
-export function getToolsByCategory(category: Tool['category']): Tool[] {
-  return allTools.filter(tool => tool.category === category)
+export async function getAllToolsAsync(): Promise<AgentTool[]> {
+  return agentToolRegistry.listTools()
+}
+
+export function getAllToolsSync(): AgentTool[] {
+  return agentToolRegistry.listTools()
+}
+
+export async function reloadMcpTools(): Promise<void> {
+  // MCP tools are exposed through mcp_call_tool and the prompt-side catalog,
+  // so there is no runtime cache to refresh here.
+}
+
+export function getToolByName(name: string): AgentTool | undefined {
+  return agentToolRegistry.getTool(name)
+}
+
+export function getToolsByCategory(category: AgentTool['category']): AgentTool[] {
+  return agentToolRegistry.listTools().filter((tool) => tool.category === category)
 }
 
 export function getToolDescriptions(): string {
-  return allTools.map(tool => {
-    const params = tool.parameters.map(p => 
-      `  - ${p.name} (${p.type}${p.required ? ', required' : ', optional'}): ${p.description}`
-    ).join('\n')
-    
+  return agentToolRegistry.listTools().map((tool) => {
     return `### ${tool.name}
+${tool.title}
 ${tool.description}
 Category: ${tool.category}
-Requires Confirmation: ${tool.requiresConfirmation ? 'Yes' : 'No'}
-Parameters:
-${params || '  None'}
-`
+Risk: ${tool.risk}`
   }).join('\n\n')
 }
 
+export * from '../tool-registry'
 export * from './note-tools'
 export * from './chat-tools'
 export * from './tag-tools'
 export * from './mark-tools'
 export * from './folder-tools'
+export * from './system-tools'
+export * from './memory-tools'
+export * from './editor-tools'

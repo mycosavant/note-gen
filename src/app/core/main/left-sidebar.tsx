@@ -1,47 +1,119 @@
 'use client'
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Files, Highlighter } from "lucide-react"
-import { FileSidebar } from "../article/file"
-import { NoteSidebar } from "../record/mark"
-import { FileActions } from "../article/file/file-actions"
-import { MarkActions } from "../record/mark/mark-actions"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
+import { Files, Highlighter, PencilRuler } from "lucide-react"
+import { FileSidebar } from "./file"
+import { NoteSidebar } from "./mark"
+import { FileActions } from "./file/file-actions"
+import { MarkActions } from "./mark/mark-actions"
 import { useTranslations } from "next-intl"
 import { useSidebarStore } from "@/stores/sidebar"
+import { ExpandableTabs } from "@/components/ui/expandable-tabs"
+import { cn } from "@/lib/utils"
+import { motion } from "framer-motion"
+import { CanvasActions, CanvasSidebar } from './canvas/canvas-sidebar'
+
+const SIDEBAR_TABS = [
+  { title: "files", icon: Files },
+  { title: "notes", icon: Highlighter },
+  { title: "canvases", icon: PencilRuler },
+] as const
 
 export function LeftSidebar() {
   const { leftSidebarTab, setLeftSidebarTab } = useSidebarStore()
   const t = useTranslations()
 
-  const handleTabChange = (value: string) => {
-    if (value === 'files' || value === 'notes') {
-      setLeftSidebarTab(value)
+  const handleTabChange = (index: number | null) => {
+    if (index !== null) {
+      setLeftSidebarTab(SIDEBAR_TABS[index].title)
     }
   }
 
+  const getSelectedIndex = () => {
+    return SIDEBAR_TABS.findIndex(tab => tab.title === leftSidebarTab)
+  }
+
+  // Prepare tabs with translated titles
+  const tabs = SIDEBAR_TABS.map(tab => ({
+    ...tab,
+    title: t(`navigation.${tab.title === 'notes' ? 'record' : tab.title}`),
+  }))
+
   return (
     <div className="w-full h-full flex flex-col">
-      <Tabs value={leftSidebarTab} onValueChange={handleTabChange} className="w-full h-full flex flex-col">
-        <div className="w-full h-12 border-b flex items-center justify-between px-2">
-          <TabsList>
-            <TabsTrigger value="files" className="gap-2">
-              <Files className="h-4 w-4" />
-              <span>{t('navigation.files')}</span>
-            </TabsTrigger>
-            <TabsTrigger value="notes" className="gap-2">
-              <Highlighter className="h-4 w-4" />
-              <span>{t('navigation.record')}</span>
-            </TabsTrigger>
-          </TabsList>
-          {leftSidebarTab === "files" && <FileActions />}
-          {leftSidebarTab === "notes" && <MarkActions />}
+      <Tabs value={leftSidebarTab} className="h-full w-full gap-0 overflow-hidden">
+        <div className="flex h-12 w-full shrink-0 items-center justify-between border-b px-2">
+          <ExpandableTabs
+            tabs={tabs}
+            onChange={handleTabChange}
+            selected={getSelectedIndex()}
+            className="shrink-0 flex-nowrap"
+          />
+          <div className="grid shrink-0">
+            <motion.div
+              initial={false}
+              animate={leftSidebarTab === "files"
+                ? { opacity: 1, x: 0 }
+                : { opacity: 0, x: -10 }}
+              transition={{ duration: 0.2 }}
+              className={cn(
+                "col-start-1 row-start-1",
+                leftSidebarTab !== "files" && "pointer-events-none"
+              )}
+            >
+              <FileActions />
+            </motion.div>
+            <motion.div
+              initial={false}
+              animate={leftSidebarTab === "notes"
+                ? { opacity: 1, x: 0 }
+                : { opacity: 0, x: 10 }}
+              transition={{ duration: 0.2 }}
+              className={cn(
+                "col-start-1 row-start-1",
+                leftSidebarTab !== "notes" && "pointer-events-none"
+              )}
+            >
+              <MarkActions />
+            </motion.div>
+            <motion.div
+              initial={false}
+              animate={leftSidebarTab === "canvases"
+                ? { opacity: 1, x: 0 }
+                : { opacity: 0, x: 10 }}
+              transition={{ duration: 0.2 }}
+              className={cn(
+                "col-start-1 row-start-1",
+                leftSidebarTab !== "canvases" && "pointer-events-none"
+              )}
+            >
+              <CanvasActions />
+            </motion.div>
+          </div>
         </div>
-        <TabsContent value="files" className="flex-1 m-0 overflow-hidden">
-          <FileSidebar />
-        </TabsContent>
-        <TabsContent value="notes" className="flex-1 m-0 overflow-hidden">
-          <NoteSidebar />
-        </TabsContent>
+        <div className="relative min-h-0 flex-1">
+          <TabsContent
+            forceMount
+            value="files"
+            className="absolute inset-0 m-0 overflow-hidden data-[state=inactive]:hidden"
+          >
+            <FileSidebar />
+          </TabsContent>
+          <TabsContent
+            forceMount
+            value="notes"
+            className="absolute inset-0 m-0 overflow-hidden data-[state=inactive]:hidden"
+          >
+            <NoteSidebar />
+          </TabsContent>
+          <TabsContent
+            forceMount
+            value="canvases"
+            className="absolute inset-0 m-0 overflow-hidden data-[state=inactive]:hidden"
+          >
+            <CanvasSidebar />
+          </TabsContent>
+        </div>
       </Tabs>
     </div>
   )

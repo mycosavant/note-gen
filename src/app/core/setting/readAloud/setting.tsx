@@ -6,11 +6,18 @@ import { Slider } from "@/components/ui/slider";
 import { useState, useEffect } from "react";
 import { Store } from "@tauri-apps/plugin-store";
 import useSettingStore from "@/stores/setting";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { SpeechMode } from '@/lib/speech/types';
 
 export function Setting() {
   const t = useTranslations('settings.readAloud');
-  const { audioModel, setAiModelList } = useSettingStore();
+  const { audioModel, textToSpeechMode, setAiModelList, setTextToSpeechMode } = useSettingStore();
   const [speed, setSpeed] = useState(1);
+  const modeOptions: Array<{ value: SpeechMode; label: string }> = [
+    { value: 'auto', label: t('options.mode.auto') },
+    { value: 'local', label: t('options.mode.local') },
+    { value: 'model', label: t('options.mode.model') },
+  ];
 
   // 加载语速设置
   useEffect(() => {
@@ -88,6 +95,26 @@ export function Setting() {
       <Item variant="outline">
         <ItemMedia variant="icon"><Volume2 className="size-4" /></ItemMedia>
         <ItemContent>
+          <ItemTitle>{t('options.mode.title')}</ItemTitle>
+          <ItemDescription>{t('options.mode.desc')}</ItemDescription>
+        </ItemContent>
+        <ItemActions>
+          <Select value={textToSpeechMode} onValueChange={(value) => setTextToSpeechMode(value as SpeechMode)}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {modeOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </ItemActions>
+      </Item>
+
+      <Item variant="outline">
+        <ItemMedia variant="icon"><Volume2 className="size-4" /></ItemMedia>
+        <ItemContent>
           <ItemTitle>{t('options.audioModel.title')}</ItemTitle>
           <ItemDescription>{t('options.audioModel.desc')}</ItemDescription>
         </ItemContent>
@@ -110,7 +137,7 @@ export function Setting() {
                 min={0.5}
                 max={2}
                 step={0.1}
-                className="w-[180px]"
+                className="w-full sm:w-[180px]"
               />
               <span className="text-zinc-500 w-10">{speed}x</span>
             </div>

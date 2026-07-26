@@ -1,52 +1,171 @@
 'use client'
 
-import { MessageSquare, Highlighter, SquarePen, Settings, User } from "lucide-react"
+import { MessageSquare, Highlighter, SquarePen, Settings, User, Plus, Square } from "lucide-react"
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from "@/lib/utils"
 import { Store } from "@tauri-apps/plugin-store"
 import { useTranslations } from 'next-intl'
-import { useSidebarStore } from "@/stores/sidebar"
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import useSettingStore from "@/stores/setting"
 import useSyncStore from "@/stores/sync"
-import { SyncStateEnum, UserInfo } from "@/lib/sync/github.types"
+import { UserInfo } from "@/lib/sync/github.types"
 import { getUserInfo } from "@/lib/sync/github"
-import { useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from '@/components/ui/popover'
+import { MobileRecordTools } from '@/components/mobile-record-tools'
+import { OrganizeNotes } from "@/app/core/main/mark/organize-notes"
+import {
+  InteractiveMenu,
+  type InteractiveMenuItem,
+} from '@/components/ui/modern-mobile-menu'
+import {
+  getAutoDataSyncState,
+  subscribeAutoDataSyncState,
+  type AutoDataSyncState,
+} from '@/lib/sync/auto-data-sync-queue'
+import useRecordingStore from "@/stores/recording"
+import emitter from "@/lib/emitter"
+import useUpdateStore from "@/stores/update"
 
+type MobileSyncIndicator = 'none' | 'syncing' | 'warning' | 'attention'
+
+type FootbarItem = InteractiveMenuItem & {
+  url: string
+  isQuickRecord?: boolean
+}
+
+function getSyncIndicatorClassName(indicator: MobileSyncIndicator) {
+  switch (indicator) {
+    case 'attention':
+      return 'bg-destructive'
+    case 'warning':
+      return 'bg-amber-500'
+    case 'syncing':
+      return 'bg-primary animate-pulse'
+    case 'none':
+    default:
+      return ''
+  }
+}
+
+function SyncIndicator({ indicator }: { indicator: MobileSyncIndicator }) {
+  if (indicator === 'none') {
+    return null
+  }
+
+  return (
+    <span
+      className={cn(
+        'absolute -right-1 -top-1 size-2 rounded-full ring-2 ring-[hsl(var(--component-active-bg))]',
+        getSyncIndicatorClassName(indicator)
+      )}
+    />
+  )
+}
+
+function ProfileAvatarIcon({ avatarUrl }: { avatarUrl: string }) {
+  return (
+    <Avatar className="size-5">
+      <AvatarImage
+        src={avatarUrl}
+        alt="Profile"
+      />
+      <AvatarFallback>
+        <User className="size-3.5" />
+      </AvatarFallback>
+    </Avatar>
+  )
+}
+
+function RecordingDockIcon() {
+  return (
+    <span className="inline-flex size-5 items-center justify-center text-red-500">
+      <Square className="size-4 animate-pulse fill-current" />
+    </span>
+  )
+}
+
+function formatRecordingDuration(seconds: number) {
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+function getMobileSyncIndicator(
+  autoDataSyncEnabled: boolean,
+  autoDataSyncState: AutoDataSyncState
+): MobileSyncIndicator {
+  if (!autoDataSyncEnabled) {
+    return 'none'
+  }
+
+  if (autoDataSyncState.phase === 'failed' || autoDataSyncState.phase === 'conflict') {
+    return 'attention'
+  }
+
+  if (autoDataSyncState.phase === 'waiting_provider') {
+    return 'warning'
+  }
+
+  if (
+    autoDataSyncState.isSyncing ||
+    autoDataSyncState.phase === 'checking_remote' ||
+    autoDataSyncState.phase === 'uploading' ||
+    autoDataSyncState.phase === 'downloading'
+  ) {
+    return 'syncing'
+  }
+
+  return 'none'
+}
 
 export function AppFootbar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { toggleFileSidebar } = useSidebarStore()
+  const [quickRecordOpen, setQuickRecordOpen] = useState(false)
+  const [autoDataSyncState, setAutoDataSyncState] = useState<AutoDataSyncState>(getAutoDataSyncState())
+  const organizeRef = useRef<{ openOrganize: () => void }>(null)
+  const { isRecording, recordingDuration } = useRecordingStore()
+  const hasMobileUpdate = useUpdateStore((state) => Boolean(state.mobileUpdate))
   const { 
     githubUsername,
     accessToken,
     primaryBackupMethod,
     giteeAccessToken,
     gitlabAccessToken,
+    giteaAccessToken,
+    autoDataSyncEnabled,
     setGithubUsername,
     setGitlabUsername,
+    setGiteaUsername,
   } = useSettingStore()
   const {
     setUserInfo,
     setSyncRepoInfo,
-    setSyncRepoState,
     setGiteeSyncRepoInfo,
-    setGiteeSyncRepoState,
     setGitlabSyncProjectInfo,
-    setGitlabSyncProjectState,
     setGiteeUserInfo,
     setGitlabUserInfo,
+    setGiteaSyncRepoInfo,
+    setGiteaUserInfo,
     giteeUserInfo,
     gitlabUserInfo,
+    giteaUserInfo,
   } = useSyncStore()
   const t = useTranslations()
   
-  // 检查是否有 GitHub 或 Gitee 账号，用于显示头像
+  // 检查是否有 GitHub、Gitee、Gitlab 或 Gitea 账号，用于显示头像
   const hasGithubAccount = Boolean(githubUsername && accessToken)
   const hasGiteeAccount = Boolean(giteeAccessToken)
   const hasGitlabAccount = Boolean(gitlabAccessToken)
-  const showAvatar = hasGithubAccount || hasGiteeAccount
+  const hasGiteaAccount = Boolean(giteaAccessToken)
+  const showAvatar = hasGithubAccount || hasGiteeAccount || hasGitlabAccount || hasGiteaAccount
+  const syncIndicator = getMobileSyncIndicator(autoDataSyncEnabled, autoDataSyncState)
+  const settingIndicator: MobileSyncIndicator = hasMobileUpdate ? 'attention' : syncIndicator
 
   // 获取当前主要备份方式的用户信息
   async function handleGetUserInfo() {
@@ -54,7 +173,6 @@ export function AppFootbar() {
       if (primaryBackupMethod === 'github') {
         if (accessToken) {
           setSyncRepoInfo(undefined)
-          setSyncRepoState(SyncStateEnum.checking)
           const res = await getUserInfo()
           if (res) {
             setUserInfo(res.data as UserInfo)
@@ -65,7 +183,6 @@ export function AppFootbar() {
         if (giteeAccessToken) {
           // 获取 Gitee 用户信息
           setGiteeSyncRepoInfo(undefined)
-          setGiteeSyncRepoState(SyncStateEnum.checking)
           const res = await import('@/lib/sync/gitee').then(module => module.getUserInfo())
           if (res) {
             setGiteeUserInfo(res)
@@ -75,7 +192,6 @@ export function AppFootbar() {
         if (gitlabAccessToken) {
           // 获取 Gitlab 用户信息
           setGitlabSyncProjectInfo(undefined)
-          setGitlabSyncProjectState(SyncStateEnum.checking)
           const { getUserInfo } = await import('@/lib/sync/gitlab')
           const res = await getUserInfo()
           if (res) {
@@ -83,109 +199,171 @@ export function AppFootbar() {
             setGitlabUsername(res.username)
           }
         }
+      } else if (primaryBackupMethod === 'gitea') {
+        if (giteaAccessToken) {
+          // 获取 Gitea 用户信息
+          setGiteaSyncRepoInfo(undefined)
+          const { getUserInfo } = await import('@/lib/sync/gitea')
+          const res = await getUserInfo()
+          if (res) {
+            setGiteaUserInfo(res)
+            setGiteaUsername(res.username)
+          }
+        }
       } else {
         setUserInfo(undefined)
         setGiteeUserInfo(undefined)
         setGitlabUserInfo(undefined)
+        setGiteaUserInfo(undefined)
       }
     } catch (err) {
       console.error('Failed to get user info:', err)
     }
   }
   
-  // 确定使用哪个账号用于头像显示
-  const username = primaryBackupMethod === 'github' && hasGithubAccount 
-    ? githubUsername 
-    : primaryBackupMethod === 'gitee' && hasGiteeAccount
-    ? giteeUserInfo?.login
-    : primaryBackupMethod === 'gitlab' && hasGitlabAccount
-    ? gitlabUserInfo?.username
-    : ''
+  // 根据主备份方式获取正确的头像地址
+  const getAvatarUrl = () => {
+    switch (primaryBackupMethod) {
+      case 'github':
+        if (hasGithubAccount && githubUsername) {
+          return `https://github.com/${githubUsername}.png`
+        }
+        break
+      case 'gitee':
+        if (hasGiteeAccount && giteeUserInfo?.avatar_url) {
+          return giteeUserInfo.avatar_url
+        }
+        break
+      case 'gitlab':
+        if (hasGitlabAccount && gitlabUserInfo?.avatar_url) {
+          return gitlabUserInfo.avatar_url
+        }
+        break
+      case 'gitea':
+        if (hasGiteaAccount && giteaUserInfo?.avatar_url) {
+          return giteaUserInfo.avatar_url
+        }
+        break
+      default:
+        return ''
+    }
+    return ''
+  }
+
+  const avatarUrl = getAvatarUrl()
     
   // 底部导航菜单项
-  const items = [
+  const items: FootbarItem[] = [
     {
-      title: t('navigation.chat'),
+      id: 'chat',
+      label: t('navigation.mobileDock.chat'),
       url: "/mobile/chat",
       icon: MessageSquare,
     },
     {
-      title: t('navigation.record'),
+      id: 'record',
+      label: t('navigation.mobileDock.record'),
       url: "/mobile/record",
       icon: Highlighter,
     },
     {
-      title: t('navigation.write'),
+      id: 'quick-record',
+      label: isRecording ? formatRecordingDuration(recordingDuration) : t('navigation.mobileDock.quickRecord'),
+      url: "#quick-record",
+      icon: Plus,
+      iconElement: isRecording ? <RecordingDockIcon /> : undefined,
+      isQuickRecord: true,
+    },
+    {
+      id: 'writing',
+      label: t('navigation.mobileDock.write'),
       url: "/mobile/writing",
       icon: SquarePen,
     },
     {
-      title: t('navigation.setting'),
+      id: 'setting',
+      label: t('navigation.mobileDock.me'),
       url: "/mobile/setting",
       icon: Settings,
+      iconElement: showAvatar && avatarUrl ? <ProfileAvatarIcon avatarUrl={avatarUrl} /> : undefined,
+      indicator: <SyncIndicator indicator={settingIndicator} />,
     },
   ]
 
+  const routeActiveIndex = items.findIndex(item => pathname === item.url)
+  const quickRecordIndex = items.findIndex(item => item.isQuickRecord)
+  const activeIndex =
+    (isRecording || quickRecordOpen) && quickRecordIndex >= 0 ? quickRecordIndex : Math.max(routeActiveIndex, 0)
+
   // 处理导航点击事件
-  async function menuHandler(item: typeof items[0]) {
-    if (pathname === '/core/article' && item.url === '/core/article') {
-      toggleFileSidebar()
-    } else {
-      router.push(item.url)
+  async function menuHandler(item: FootbarItem) {
+    if (item.isQuickRecord) {
+      if (isRecording) {
+        setQuickRecordOpen(false)
+        emitter.emit('toolbar-shortcut-recording')
+        return
+      }
+
+      // 快捷记录按钮：打开浮动弹窗
+      setQuickRecordOpen(open => !open)
+      return
     }
+    
+    setQuickRecordOpen(false)
+    router.push(item.url)
     const store = await Store.load('store.json')
     store.set('currentPage', item.url)
   }
 
+  const handleMobileOrganize = () => {
+    setQuickRecordOpen(false)
+    window.requestAnimationFrame(() => {
+      organizeRef.current?.openOrganize()
+    })
+  }
+
   useEffect(() => {
-    if (accessToken || giteeAccessToken || gitlabAccessToken) {
+    if (accessToken || giteeAccessToken || gitlabAccessToken || giteaAccessToken) {
       handleGetUserInfo()
     }
-  }, [accessToken, giteeAccessToken, gitlabAccessToken, primaryBackupMethod])
+  }, [accessToken, giteeAccessToken, gitlabAccessToken, giteaAccessToken, primaryBackupMethod])
+
+  useEffect(() => subscribeAutoDataSyncState(setAutoDataSyncState), [])
 
   return (
-    <div className="w-full border-t bg-background h-14">
-      <div className="flex h-full items-center justify-around">
-        {items.map((item, index) => (
-          <button
-            key={index}
-            onClick={() => menuHandler(item)}
-            className={cn(
-              "flex flex-col items-center justify-center w-1/4 py-1 transition-colors relative",
-              pathname === item.url
-                ? "text-primary"
-                : "text-muted-foreground hover:text-primary"
-            )}
-          >
-            {/* 最后一项可能显示头像 */}
-            {index === items.length - 1 && showAvatar && username ? (
-              <div className="flex flex-col items-center">
-                <Avatar className="h-6 w-6">
-                  <AvatarImage 
-                    src={`https://github.com/${username}.png`} 
-                    alt="Profile" 
-                  />
-                  <AvatarFallback>
-                    <User className="h-4 w-4" />
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-xs mt-0.5">{item.title}</span>
-                {pathname === item.url && (
-                  <div className="absolute -bottom-1 w-1 h-1 rounded-full bg-primary" />
-                )}
-              </div>
-            ) : (
-              <>
-                <item.icon className="h-5 w-5" />
-                <span className="text-xs mt-0.5">{item.title}</span>
-                {pathname === item.url && (
-                  <div className="absolute -bottom-1 w-1 h-1 rounded-full bg-primary" />
-                )}
-              </>
-            )}
-          </button>
-        ))}
-      </div>
+    <div className="flex h-full w-full items-center justify-center px-2 min-[380px]:px-3">
+      <Popover open={quickRecordOpen} onOpenChange={setQuickRecordOpen}>
+        <PopoverAnchor asChild>
+          <InteractiveMenu
+            accentColor={isRecording ? "rgb(239 68 68)" : undefined}
+            activeIndex={activeIndex}
+            aria-label={t('navigation.navigate')}
+            className="w-full"
+            items={items}
+            onActiveIndexChange={(index) => {
+              const item = items[index]
+              if (item) {
+                menuHandler(item)
+              }
+            }}
+          />
+        </PopoverAnchor>
+        <PopoverContent
+          align="center"
+          side="top"
+          sideOffset={10}
+          collisionPadding={12}
+          className="origin-bottom w-[min(92vw,360px)] rounded-[1.35rem] border-border/60 bg-background/70 p-2 text-foreground shadow-[0_18px_48px_rgb(0_0_0/0.18)] backdrop-blur-xl will-change-[transform,opacity] supports-[backdrop-filter]:bg-background/60 data-[state=open]:duration-[220ms] data-[state=closed]:duration-150 data-[state=open]:ease-out data-[state=closed]:ease-in data-[state=closed]:slide-out-to-bottom-2 dark:shadow-[0_22px_54px_rgb(0_0_0/0.36)]"
+          onOpenAutoFocus={event => event.preventDefault()}
+          onCloseAutoFocus={event => event.preventDefault()}
+        >
+          <MobileRecordTools
+            onClose={() => setQuickRecordOpen(false)}
+            onOrganize={handleMobileOrganize}
+          />
+        </PopoverContent>
+      </Popover>
+      <OrganizeNotes ref={organizeRef} />
     </div>
   )
 }

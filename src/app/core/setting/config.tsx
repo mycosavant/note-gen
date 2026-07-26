@@ -3,11 +3,8 @@ import {
   LayoutTemplate,
   ScanText,
   Store,
-  UserRoundCog,
   Drama,
   FolderOpen,
-  Package,
-  Database,
   DatabaseBackup,
   ImageUp,
   FileCog,
@@ -15,87 +12,125 @@ import {
   KeyboardIcon,
   Volume2,
   Settings,
-  Puzzle
+  Puzzle,
+  Sparkles,
+  PenTool,
+  Brain,
+  Globe2,
+  PanelsTopLeft,
 } from "lucide-react"
+import type { ReactNode } from 'react'
+import type { SettingSection } from '@/stores/settings-dialog'
 
-const baseConfig = [
+export type SettingNavigationGroup =
+  | 'basic'
+  | 'aiExtensions'
+  | 'data'
+
+export type SettingNavigationItem =
+  | {
+      icon: ReactNode
+      anchor: SettingSection
+    }
+  | {
+      group: SettingNavigationGroup
+    }
+
+const baseConfig: SettingNavigationItem[] = [
   {
-    icon: <Store className="size-4 md:size-6" />,
+    group: 'basic',
+  },
+  {
+    icon: <Store className="size-4" />,
     anchor: 'about',
   },
   {
-    icon: <Settings className="size-4 md:size-6" />,
+    icon: <Settings className="size-4" />,
     anchor: 'general',
   },
-  '-',
   {
-    icon: <DatabaseBackup className="size-4 md:size-6" />,
-    anchor: 'sync',
+    icon: <PenTool className="size-4" />,
+    anchor: 'record',
   },
   {
-    icon: <ImageUp className="size-4 md:size-6" />,
-    anchor: 'imageHosting',
-  },
-  {
-    icon: <Database className="size-4 md:size-6" />,
-    anchor: 'backupSync',
-  },
-  '-',
-  {
-    icon: <BotMessageSquare className="size-4 md:size-6" />,
-    anchor: 'ai',
-  },
-  {
-    icon: <Package className="size-4 md:size-6" />,
-    anchor: 'defaultModel',
-  },
-  {
-    icon: <Book className="size-4 md:size-6" />,
-    anchor: 'rag',
-  },
-  {
-    icon: <Puzzle className="size-4 md:size-6" />,
-    anchor: 'mcp',
-  },
-  {
-    icon: <Drama className="size-4 md:size-6" />,
-    anchor: 'prompt',
-  },
-  {
-    icon: <LayoutTemplate className="size-4 md:size-6" />,
-    anchor: 'template',
-  },
-  '-',
-  {
-    icon: <FolderOpen className="size-4 md:size-6" />,
-    anchor: 'file',
-  },
-  {
-    icon: <FileCog className="size-4 md:size-6" />,
+    icon: <FileCog className="size-4" />,
     anchor: 'editor',
   },
   {
-    icon: <KeyboardIcon className="size-4 md:size-6" />,
+    icon: <PanelsTopLeft className="size-4" />,
+    anchor: 'canvas',
+  },
+  {
+    icon: <KeyboardIcon className="size-4" />,
     anchor: 'shortcuts',
   },
   {
-    icon: <ScanText className="size-4 md:size-6" />,
+    icon: <ScanText className="size-4" />,
     anchor: 'imageMethod',
   },
   {
-    icon: <Volume2 className="size-4 md:size-6" />,
+    icon: <Volume2 className="size-4" />,
     anchor: 'audio',
   },
-  '-',
   {
-    icon: <UserRoundCog className="size-4 md:size-6" />,
-    anchor: 'dev',
+    group: 'aiExtensions',
+  },
+  {
+    icon: <BotMessageSquare className="size-4" />,
+    anchor: 'ai',
+  },
+  {
+    icon: <Globe2 className="size-4" />,
+    anchor: 'webSearch',
+  },
+  {
+    icon: <Book className="size-4" />,
+    anchor: 'rag',
+  },
+  {
+    icon: <Brain className="size-4" />,
+    anchor: 'memories',
+  },
+  {
+    icon: <Drama className="size-4" />,
+    anchor: 'prompt',
+  },
+  {
+    icon: <Puzzle className="size-4" />,
+    anchor: 'mcp',
+  },
+  {
+    icon: <Sparkles className="size-4" />,
+    anchor: 'skills',
+  },
+  {
+    icon: <LayoutTemplate className="size-4" />,
+    anchor: 'template',
+  },
+  {
+    group: 'data',
+  },
+  {
+    icon: <DatabaseBackup className="size-4" />,
+    anchor: 'sync',
+  },
+  {
+    icon: <ImageUp className="size-4" />,
+    anchor: 'imageHosting',
+  },
+  {
+    icon: <FolderOpen className="size-4" />,
+    anchor: 'file',
   }
 ]
 
 export default baseConfig
 
 export type ModelType = 'chat' | 'image' | 'video' | 'tts' | 'stt' | 'embedding' | 'rerank';
+export type ProxyMode = 'inherit' | 'direct' | 'custom';
+export type WebSearchProvider = 'auto' | 'zhipu' | 'tavily' | 'brave' | 'exa';
+export type WebSearchApiProvider = Exclude<WebSearchProvider, 'auto'>;
+export type WebSearchApiKeys = Partial<Record<WebSearchApiProvider, string>>;
 
 export interface ModelConfig {
   id: string
@@ -105,6 +140,17 @@ export interface ModelConfig {
   topP?: number
   voice?: string
   enableStream?: boolean
+  maxTokens?: number
+  contextWindow?: number
+  tokenLimitParam?: 'max_completion_tokens' | 'max_tokens'
+  enableWebSearch?: boolean
+  enableNativeWebSearch?: boolean
+  enableThirdPartyWebSearch?: boolean
+  enableBasicWebSearch?: boolean
+  webSearchProvider?: WebSearchProvider
+  webSearchApiKey?: string
+  webSearchApiKeys?: WebSearchApiKeys
+  webSearchProviderOrder?: WebSearchApiProvider[]
 }
 
 export interface AiConfig {
@@ -112,9 +158,13 @@ export interface AiConfig {
   title: string
   apiKey?: string
   baseURL?: string
+  templateKey?: string
+  templateSource?: 'builtin' | 'remote' | 'custom'
   icon?: string
   apiKeyUrl?: string
   customHeaders?: Record<string, string>
+  proxyMode?: ProxyMode
+  proxyURL?: string
   models?: ModelConfig[]
   // 保持向后兼容
   model?: string
@@ -124,6 +174,17 @@ export interface AiConfig {
   voice?: string
   speed?: number
   enableStream?: boolean
+  maxTokens?: number
+  contextWindow?: number
+  tokenLimitParam?: 'max_completion_tokens' | 'max_tokens'
+  enableWebSearch?: boolean
+  enableNativeWebSearch?: boolean
+  enableThirdPartyWebSearch?: boolean
+  enableBasicWebSearch?: boolean
+  webSearchProvider?: WebSearchProvider
+  webSearchApiKey?: string
+  webSearchApiKeys?: WebSearchApiKeys
+  webSearchProviderOrder?: WebSearchApiProvider[]
 }
 
 export interface Model {
@@ -134,14 +195,7 @@ export interface Model {
 }
 
 // Define base AI configuration without translations
-const baseAiConfig: AiConfig[] = [
-  {
-    key: 'siliconflow',
-    title: 'SiliconFlow',
-    baseURL: 'https://api.siliconflow.cn/v1',
-    icon: 'https://s2.loli.net/2025/09/09/D8Al2raSvewN5xn.jpg',
-    apiKeyUrl: 'https://cloud.siliconflow.cn/i/O2ciJeZw'
-  },
+const builtinProviderTemplates: AiConfig[] = [
   {
     key: 'chatgpt',
     title: 'ChatGPT',
@@ -157,13 +211,6 @@ const baseAiConfig: AiConfig[] = [
     apiKeyUrl: 'https://aistudio.google.com/app/apikey'
   },
   {
-    key: 'grok',
-    title: 'Grok',
-    baseURL: 'https://api.x.ai/v1',
-    icon: 'https://s2.loli.net/2025/06/25/JBZMluaobKq43QE.png',
-    apiKeyUrl: 'https://console.x.ai/'
-  },
-  {
     key: 'ollama',
     title: 'Ollama',
     baseURL: 'http://localhost:11434/v1',
@@ -175,48 +222,8 @@ const baseAiConfig: AiConfig[] = [
     baseURL: 'http://localhost:1234/v1',
     icon: 'https://s2.loli.net/2025/06/25/IifFV4HTQ9dpGZE.png',
   },
-  {
-    key: 'deepseek',
-    title: 'DeepSeek',
-    baseURL: 'https://api.deepseek.com',
-    icon: 'https://s2.loli.net/2025/06/25/n39WmsCDbVLQzjr.png',
-    apiKeyUrl: 'https://platform.deepseek.com/api_keys'
-  },
-  {
-    key: 'openrouter',
-    title: 'OpenRouter',
-    baseURL: 'https://openrouter.ai/api/v1',
-    icon: 'https://s2.loli.net/2025/06/25/CTjSDHLl4XdvxM5.png',
-    apiKeyUrl: 'https://openrouter.ai/api-keys'
-  },
-  {
-    key: 'qiniu',
-    title: '七牛云',
-    baseURL: 'https://openai.qiniu.com/v1',
-    icon: 'https://s2.loli.net/2025/09/15/ALjNPveWrtmsfOY.png',
-    apiKeyUrl: 'https://s.qiniu.com/Znm6je'
-  },
-  {
-    key: '302',
-    title: '302.AI',
-    baseURL: 'https://api.302.ai/v1',
-    icon: 'https://s2.loli.net/2025/06/26/4CJOQ2U9ibvoGpR.png',
-    apiKeyUrl: 'https://share.302.ai/jfFrIP'
-  },
-  {
-    key: 'shengsuanyun',
-    title: '胜算云',
-    baseURL: 'https://router.shengsuanyun.com/api/v1',
-    icon: 'https://s2.loli.net/2025/09/15/4qjswKyaRfZ8OxW.png',
-    apiKeyUrl: 'https://www.shengsuanyun.com/?from=CH_KAFLGC9O'
-  },
-  {
-    key: 'gitee',
-    title: 'Gitee AI',
-    baseURL: 'https://ai.gitee.com/v1',
-    icon: 'https://s2.loli.net/2025/09/15/ih7aTnGPvELFsVc.png',
-    apiKeyUrl: 'https://ai.gitee.com/'
-  },
 ]
 
-export { baseAiConfig }
+const baseAiConfig = builtinProviderTemplates
+
+export { baseAiConfig, builtinProviderTemplates }

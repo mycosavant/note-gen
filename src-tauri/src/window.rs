@@ -1,4 +1,5 @@
-use tauri::{Manager, WindowEvent, AppHandle};
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
+use tauri_plugin_store::StoreExt;
 
 pub fn setup_window_events(app: &AppHandle) -> tauri::Result<()> {
     if let Some(window) = app.get_webview_window("main") {
@@ -11,49 +12,45 @@ pub fn setup_window_events(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-#[cfg(target_os = "macos")]
-fn handle_window_event(event: &WindowEvent, window: &tauri::WebviewWindow, app_handle: &AppHandle) {
-    match event {
-        WindowEvent::CloseRequested { api, .. } => {
-            // 阻止默认关闭行为
+fn handle_window_event(
+    event: &WindowEvent,
+    window: &tauri::WebviewWindow,
+    app_handle: &AppHandle,
+) {
+    let WindowEvent::CloseRequested { api, .. } = event else {
+        return;
+    };
+
+    match get_close_behavior(app_handle).as_str() {
+        "quit" => {
             api.prevent_close();
-            
-            // 检查是否处于全屏状态，如果是则先退出全屏
-            if let Ok(is_fullscreen) = window.is_fullscreen() {
-                if is_fullscreen {
-                    let _ = window.set_fullscreen(false);
-                    // 等待退出全屏动画完成
-                    std::thread::sleep(std::time::Duration::from_millis(300));
-                }
-            }
-            
-            // 隐藏窗口到托盘
-            let _ = window.hide();
-            let _ = app_handle.hide();
+            app_handle.exit(0);
         }
-        _ => {}
+        "ask" => {
+            api.prevent_close();
+            let _ = window.emit("close-behavior-requested", ());
+        }
+        _ => {
+            api.prevent_close();
+            let _ = window.hide();
+        }
     }
 }
 
-#[cfg(not(target_os = "macos"))]
-fn handle_window_event(event: &WindowEvent, window: &tauri::WebviewWindow, _app_handle: &AppHandle) {
-    match event {
-        WindowEvent::CloseRequested { api, .. } => {
-            // 阻止默认关闭行为
-            api.prevent_close();
-            
-            // 隐藏窗口到托盘
-            let _ = window.hide();
-        }
-        _ => {}
-    }
+fn get_close_behavior(app_handle: &AppHandle) -> String {
+    app_handle
+        .store("store.json")
+        .ok()
+        .and_then(|store| store.get("closeBehavior"))
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .unwrap_or_else(|| "minimize".to_string())
 }
 
 pub fn handle_single_instance(app: &AppHandle, _argv: Vec<String>, _cwd: String) {
     if let Some(window) = app.get_webview_window("main") {
         let is_visible = window.is_visible().unwrap_or(false);
         let is_minimized = window.is_minimized().unwrap_or(false);
-        
+
         if !is_visible {
             let _ = window.show();
             let _ = window.set_focus();
@@ -72,6 +69,8 @@ pub fn handle_single_instance(app: &AppHandle, _argv: Vec<String>, _cwd: String)
             let _ = window.set_always_on_top(false);
         }
     }
+
+    crate::file_open::handle_single_instance_open_files(app, _argv);
 }
 
 #[cfg(target_os = "macos")]

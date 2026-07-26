@@ -8,9 +8,10 @@ import { readFile, BaseDirectory } from '@tauri-apps/plugin-fs'
 
 interface AudioPlayerProps {
   audioPath: string
+  compact?: boolean
 }
 
-export function AudioPlayer({ audioPath }: AudioPlayerProps) {
+export function AudioPlayer({ audioPath, compact = false }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
   
   const [isPlaying, setIsPlaying] = useState(false)
@@ -37,8 +38,6 @@ export function AudioPlayer({ audioPath }: AudioPlayerProps) {
                         extension === 'm4a' ? 'audio/mp4' :
                         extension === 'mp3' ? 'audio/mpeg' :
                         'audio/webm'
-        
-        console.log('加载音频:', audioPath, '类型:', mimeType)
         
         // 创建 Blob URL
         const buffer = fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength) as ArrayBuffer
@@ -99,9 +98,63 @@ export function AudioPlayer({ audioPath }: AudioPlayerProps) {
 
   // 如果音频源未加载，显示加载提示
   if (!audioSrc) {
+    if (compact) {
+      return (
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled
+          className="size-5 shrink-0"
+        >
+          <Play className="size-3" />
+        </Button>
+      )
+    }
+
     return (
       <div className="w-full py-1 px-2 bg-muted/30 rounded text-center text-xs text-muted-foreground">
         加载音频中...
+      </div>
+    )
+  }
+
+  if (compact) {
+    return (
+      <div className="flex items-center">
+        <audio
+          ref={audioRef}
+          src={audioSrc}
+          preload="metadata"
+          onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+          onLoadedMetadata={(e) => {
+            const duration = e.currentTarget.duration
+            setDuration(duration)
+            setIsReady(true)
+          }}
+          onCanPlay={() => {
+            setIsReady(true)
+          }}
+          onEnded={() => setIsPlaying(false)}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onError={(e) => {
+            console.error('音频加载错误:', e.currentTarget.error)
+            setIsReady(false)
+          }}
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={togglePlay}
+          disabled={!isReady}
+          className="size-5 shrink-0"
+        >
+          {isPlaying ? (
+            <Pause className="size-3" />
+          ) : (
+            <Play className="size-3" />
+          )}
+        </Button>
       </div>
     )
   }
@@ -116,12 +169,10 @@ export function AudioPlayer({ audioPath }: AudioPlayerProps) {
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => {
           const duration = e.currentTarget.duration
-          console.log('音频元数据已加载, 时长:', duration)
           setDuration(duration)
           setIsReady(true)
         }}
         onCanPlay={() => {
-          console.log('音频可以播放了')
           setIsReady(true)
         }}
         onEnded={() => setIsPlaying(false)}
@@ -131,8 +182,8 @@ export function AudioPlayer({ audioPath }: AudioPlayerProps) {
           console.error('音频加载错误:', e.currentTarget.error)
           setIsReady(false)
         }}
-        onLoadStart={() => console.log('开始加载音频')}
-        onLoadedData={() => console.log('音频数据已加载')}
+        onLoadStart={() => {}}
+        onLoadedData={() => {}}
       />
 
       {/* 播放/暂停按钮 */}

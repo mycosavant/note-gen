@@ -17,10 +17,6 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
-import {
-  Check,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { TooltipButton } from "@/components/tooltip-button"
@@ -31,9 +27,19 @@ interface GroupedModel {
   model: ModelConfig
 }
 
-export function ModelSelect({modelKey}: {modelKey: string}) {
+export function ModelSelect({
+  modelKey,
+  emptyLabel,
+  clearTooltip,
+  onValueChange,
+}: {
+  modelKey: string
+  emptyLabel?: string
+  clearTooltip?: string
+  onValueChange?: (model: string) => void | Promise<void>
+}) {
   const [groupedModels, setGroupedModels] = useState<GroupedModel[]>([])
-  const { setPlaceholderModel, setTranslateModel, setMarkDescModel, setPrimaryModel, setImageMethodModel, setAudioModel, setSttModel, setEmbeddingModel, setRerankingModel } = useSettingStore()
+  const { setCompletionModel, setEditorModel, setMarkDescModel, setPrimaryModel, setImageMethodModel, setAudioModel, setSttModel, setEmbeddingModel, setRerankingModel } = useSettingStore()
   const [model, setModel] = useState<string>('')
   const [open, setOpen] = React.useState(false)
   const t = useTranslations('settings.defaultModel')
@@ -45,10 +51,8 @@ export function ModelSelect({modelKey}: {modelKey: string}) {
         return 'primaryModel'
       case 'imageMethod':
         return 'imageMethodModel'
-      case 'placeholder':
-        return 'placeholderModel'
-      case 'translate':
-        return 'translateModel'
+      case 'completion':
+        return 'completionModel'
       case 'markDesc':
         return 'markDescModel'
       case 'audio':
@@ -71,14 +75,14 @@ export function ModelSelect({modelKey}: {modelKey: string}) {
       case 'primaryModel':
         setPrimaryModel(primaryModel)
         break;
+      case 'editor':
+        setEditorModel(primaryModel)
+        break;
       case 'imageMethod':
         setImageMethodModel(primaryModel)
         break;
-      case 'placeholder':
-        setPlaceholderModel(primaryModel)
-        break;
-      case 'translate':
-        setTranslateModel(primaryModel)
+      case 'completion':
+        setCompletionModel(primaryModel)
         break;
       case 'markDesc':
         setMarkDescModel(primaryModel)
@@ -176,6 +180,7 @@ export function ModelSelect({modelKey}: {modelKey: string}) {
     const storeKey = getStoreKey(modelKey)
     store.set(storeKey, e)
     await store.save()
+    await onValueChange?.(e)
   }
 
   async function resetDefaultModel() {
@@ -184,23 +189,14 @@ export function ModelSelect({modelKey}: {modelKey: string}) {
     store.set(storeKey, '')
     await store.save()
     setPrimaryModelHandler('')
+    await onValueChange?.('')
   }
 
   // 检查模型是否被选中（支持向后兼容）
-  const isModelSelected = (modelId: string): boolean => {
+  const isModelSelected = (item: GroupedModel): boolean => {
     if (!model) return false
     
-    // 首先尝试精确匹配（新格式的组合键）
-    if (model === modelId) return true
-    
-    // 向后兼容匹配（旧格式的单独ID）
-    if (modelId.includes('-')) {
-      const parts = modelId.split('-')
-      const originalId = parts.slice(2).join('-') // 去掉 config.key 部分
-      return originalId === model
-    }
-    
-    return false
+    return model === item.model.id || model === `${item.configKey}-${item.model.id}`
   }
 
   // 查找当前选中的模型显示信息
@@ -208,20 +204,7 @@ export function ModelSelect({modelKey}: {modelKey: string}) {
     if (!model || !groupedModels.length) return null
     
     // 首先尝试精确匹配（新格式的组合键）
-    let selectedItem = groupedModels.find(item => item.model.id === model)
-    
-    // 如果没找到，尝试向后兼容匹配（旧格式的单独ID）
-    if (!selectedItem) {
-      selectedItem = groupedModels.find(item => {
-        // 对于新格式的组合键，提取原始ID进行匹配
-        if (item.model.id.includes('-')) {
-          const parts = item.model.id.split('-')
-          const originalId = parts.slice(2).join('-') // 去掉 config.key 部分
-          return originalId === model
-        }
-        return item.model.id === model
-      })
-    }
+    const selectedItem = groupedModels.find(isModelSelected)
     
     if (selectedItem) {
       return `${selectedItem.model.model}(${selectedItem.configTitle})`
@@ -245,18 +228,18 @@ export function ModelSelect({modelKey}: {modelKey: string}) {
   
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <div className="flex gap-2">
+      <div className="flex w-full min-w-0 gap-2 sm:w-auto">
         <PopoverTrigger asChild>
-          <div className="flex-1 overflow-hidden">
+          <div className="min-w-0 flex-1 overflow-hidden">
             <Button
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              className="w-full md:w-[280px] justify-between"
+              className="w-full min-w-0 justify-between sm:w-[280px]"
             >
               {model
-                ? findSelectedModelDisplay()
-                : modelKey === 'primaryModel' ? t('noModel') : t('tooltip')}
+                ? findSelectedModelDisplay() || model
+                : emptyLabel || (modelKey === 'primaryModel' ? t('noModel') : t('tooltip'))}
               <ChevronsUpDown className="opacity-50" />
             </Button>
           </div>
@@ -266,7 +249,7 @@ export function ModelSelect({modelKey}: {modelKey: string}) {
           icon={<X className="h-4 w-4" />}
           onClick={resetDefaultModel}
           variant="default"
-          tooltipText={t('tooltip')}
+          tooltipText={clearTooltip || t('tooltip')}
         />
       </div>
       <PopoverContent align="end" className="p-0">
@@ -280,18 +263,13 @@ export function ModelSelect({modelKey}: {modelKey: string}) {
                   <CommandItem
                     key={item.model.id}
                     value={item.model.id}
+                    data-checked={isModelSelected(item)}
                     onSelect={(currentValue) => {
                       modelSelectChangeHandler(currentValue)
                       setOpen(false)
                     }}
                   >
                     {item.model.model}
-                    <Check
-                      className={cn(
-                        "ml-auto",
-                        isModelSelected(item.model.id) ? "opacity-100" : "opacity-0"
-                      )}
-                    />
                   </CommandItem>
                 ))}
               </CommandGroup>

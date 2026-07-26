@@ -2,27 +2,25 @@
 
 import { useEffect } from 'react'
 import { useTranslations } from 'next-intl'
-import { GlobalSettings } from '@/app/core/setting/mcp/global-settings'
 import { ServerList } from '@/app/core/setting/mcp/server-list'
 import { useMcpStore } from '@/stores/mcp'
 
 export default function McpSettingPage() {
   const t = useTranslations('settings.mcp')
   const { initMcpData } = useMcpStore()
-  
+
   useEffect(() => {
-    initMcpData()
-  }, [])
-  
+    void initMcpData()
+  }, [initMcpData])
+
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">{t('title')}</h1>
+    <div className="flex min-w-0 flex-col gap-6">
+      <header className="flex flex-col gap-1.5">
+        <h1 className="text-xl font-semibold tracking-tight">{t('title')}</h1>
         <p className="text-sm text-muted-foreground">{t('desc')}</p>
-      </div>
-      <div className="space-y-6">
-        <GlobalSettings />
-        <ServerList />
+      </header>
+      <div className="flex min-w-0 flex-col gap-6">
+        <ServerList mobile />
       </div>
     </div>
   )

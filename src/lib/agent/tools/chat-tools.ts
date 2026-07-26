@@ -1,16 +1,16 @@
 import { Tool, ToolResult } from '../types'
-import { getChats, insertChat, updateChat, deleteChat, clearChatsByTagId, Chat } from '@/db/chats'
+import { getChats, insertChat, updateChat, deleteChat, clearChatsByTagId, Chat, insertChats, updateChats, deleteChats } from '@/db/chats'
 
 export const readChatsTool: Tool = {
   name: 'read_chats',
-  description: '读取指定标签下的所有对话记录',
+  description: 'Read all chat records under the specified tag',
   category: 'chat',
   requiresConfirmation: false,
   parameters: [
     {
       name: 'tagId',
       type: 'number',
-      description: '标签ID',
+      description: 'Tag ID',
       required: true,
     },
   ],
@@ -33,32 +33,32 @@ export const readChatsTool: Tool = {
 
 export const createChatTool: Tool = {
   name: 'create_chat',
-  description: '创建一条新的对话记录',
+  description: 'Create a new chat record',
   category: 'chat',
   requiresConfirmation: false,
   parameters: [
     {
       name: 'tagId',
       type: 'number',
-      description: '标签ID',
+      description: 'Tag ID',
       required: true,
     },
     {
       name: 'content',
       type: 'string',
-      description: '对话内容',
+      description: 'Chat content',
       required: true,
     },
     {
       name: 'role',
       type: 'string',
-      description: '角色：system 或 user',
+      description: 'Role: system or user',
       required: true,
     },
     {
       name: 'type',
       type: 'string',
-      description: '类型：chat, note, clipboard, clear',
+      description: 'Type: chat, note, clipboard, clear',
       required: false,
       default: 'chat',
     },
@@ -89,26 +89,26 @@ export const createChatTool: Tool = {
 
 export const updateChatTool: Tool = {
   name: 'update_chat',
-  description: '更新指定的对话记录',
+  description: 'Update the specified chat record',
   category: 'chat',
   requiresConfirmation: false,
   parameters: [
     {
       name: 'id',
       type: 'number',
-      description: '对话记录ID',
+      description: 'Chat record ID',
       required: true,
     },
     {
       name: 'content',
       type: 'string',
-      description: '新的对话内容',
+      description: 'New chat content',
       required: false,
     },
     {
       name: 'inserted',
       type: 'boolean',
-      description: '是否已插入到笔记中',
+      description: 'Whether inserted into notes',
       required: false,
     },
   ],
@@ -146,14 +146,14 @@ export const updateChatTool: Tool = {
 
 export const deleteChatTool: Tool = {
   name: 'delete_chat',
-  description: '删除指定的对话记录',
+  description: 'Delete the specified chat record',
   category: 'chat',
   requiresConfirmation: true,
   parameters: [
     {
       name: 'id',
       type: 'number',
-      description: '要删除的对话记录ID',
+      description: 'ID of the chat record to delete',
       required: true,
     },
   ],
@@ -175,14 +175,14 @@ export const deleteChatTool: Tool = {
 
 export const clearChatsTool: Tool = {
   name: 'clear_chats',
-  description: '清空指定标签下的所有对话记录',
+  description: 'Clear all chat records under the specified tag',
   category: 'chat',
   requiresConfirmation: true,
   parameters: [
     {
       name: 'tagId',
       type: 'number',
-      description: '标签ID',
+      description: 'Tag ID',
       required: true,
     },
   ],
@@ -204,20 +204,20 @@ export const clearChatsTool: Tool = {
 
 export const searchChatsTool: Tool = {
   name: 'search_chats',
-  description: '在对话记录中搜索包含关键词的内容',
+  description: 'Search chat records for content containing keywords',
   category: 'search',
   requiresConfirmation: false,
   parameters: [
     {
       name: 'query',
       type: 'string',
-      description: '搜索关键词',
+      description: 'Search keyword',
       required: true,
     },
     {
       name: 'tagId',
       type: 'number',
-      description: '可选：限制在指定标签下搜索',
+      description: 'Optional: limit search to specified tag',
       required: false,
     },
   ],
@@ -242,6 +242,146 @@ export const searchChatsTool: Tool = {
   },
 }
 
+export const createChatsBatchTool: Tool = {
+  name: 'create_chats_batch',
+  description: 'Batch create multiple chat records to avoid loop calls. Use for scenarios requiring multiple chat records to be created at once.',
+  category: 'chat',
+  requiresConfirmation: false,
+  parameters: [
+    {
+      name: 'chats',
+      type: 'array',
+      description: 'Array of chat records to create, each record contains tagId, content, role, type and other fields',
+      required: true,
+    },
+  ],
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      if (!Array.isArray(params.chats) || params.chats.length === 0) {
+        return {
+          success: false,
+          error: '参数 chats 必须是非空数组',
+        }
+      }
+
+      const chatsToInsert: Chat[] = params.chats.map((chat: any) => ({
+        id: 0,
+        tagId: chat.tagId,
+        content: chat.content,
+        role: chat.role as 'system' | 'user',
+        type: (chat.type || 'chat') as 'chat' | 'note' | 'clipboard' | 'clear',
+        inserted: false,
+        createdAt: Date.now(),
+      }))
+
+      await insertChats(chatsToInsert)
+      
+      return {
+        success: true,
+        data: { count: chatsToInsert.length },
+        message: `成功批量创建 ${chatsToInsert.length} 条对话记录`,
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: `批量创建对话记录失败: ${error}`,
+      }
+    }
+  },
+}
+
+export const updateChatsBatchTool: Tool = {
+  name: 'update_chats_batch',
+  description: 'Batch update multiple chat records to avoid loop calls. Each record must include the id field.',
+  category: 'chat',
+  requiresConfirmation: false,
+  parameters: [
+    {
+      name: 'chats',
+      type: 'array',
+      description: 'Array of chat records to update, each record must include id and fields to update',
+      required: true,
+    },
+  ],
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      if (!Array.isArray(params.chats) || params.chats.length === 0) {
+        return {
+          success: false,
+          error: '参数 chats 必须是非空数组',
+        }
+      }
+
+      const chatsToUpdate: Chat[] = params.chats.map((chat: any) => ({
+        id: chat.id,
+        tagId: chat.tagId,
+        content: chat.content,
+        role: chat.role,
+        type: chat.type,
+        inserted: chat.inserted ?? false,
+        createdAt: chat.createdAt || Date.now(),
+        image: chat.image,
+        images: chat.images,
+        ragSources: chat.ragSources,
+        agentHistory: chat.agentHistory,
+        thinking: chat.thinking,
+        quoteData: chat.quoteData,
+      }))
+
+      await updateChats(chatsToUpdate)
+      
+      return {
+        success: true,
+        data: { count: chatsToUpdate.length },
+        message: `成功批量更新 ${chatsToUpdate.length} 条对话记录`,
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: `批量更新对话记录失败: ${error}`,
+      }
+    }
+  },
+}
+
+export const deleteChatsBatchTool: Tool = {
+  name: 'delete_chats_batch',
+  description: 'Batch delete multiple chat records to avoid loop calls.',
+  category: 'chat',
+  requiresConfirmation: true,
+  parameters: [
+    {
+      name: 'ids',
+      type: 'array',
+      description: 'Array of chat record IDs to delete',
+      required: true,
+    },
+  ],
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      if (!Array.isArray(params.ids) || params.ids.length === 0) {
+        return {
+          success: false,
+          error: '参数 ids 必须是非空数组',
+        }
+      }
+
+      await deleteChats(params.ids)
+      
+      return {
+        success: true,
+        data: { count: params.ids.length },
+        message: `成功批量删除 ${params.ids.length} 条对话记录`,
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: `批量删除对话记录失败: ${error}`,
+      }
+    }
+  },
+}
+
 export const chatTools: Tool[] = [
   readChatsTool,
   createChatTool,
@@ -249,4 +389,7 @@ export const chatTools: Tool[] = [
   deleteChatTool,
   clearChatsTool,
   searchChatsTool,
+  createChatsBatchTool,
+  updateChatsBatchTool,
+  deleteChatsBatchTool,
 ]

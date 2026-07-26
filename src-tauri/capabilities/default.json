@@ -4,7 +4,8 @@
   "description": "Capability for the main window",
   "windows": [
     "main",
-    "screenshot"
+    "screenshot",
+    "pdf-print-*"
   ],
   "permissions": [
     "core:default",
@@ -124,6 +125,8 @@
           "path": "**"
         }
       ]
-    }
+    },
+    "opener:default",
+    "opener:allow-open-url"
   ]
 }

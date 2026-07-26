@@ -1,5 +1,6 @@
 import { getDb } from "./index"
 import { Store } from '@tauri-apps/plugin-store';
+import { enqueueAutoDataSync } from '@/lib/sync/auto-data-sync-queue'
 
 export interface Tag {
   id: number
@@ -8,6 +9,10 @@ export interface Tag {
   isPin?: boolean
   sortOrder?: number
   total?: number
+}
+
+function enqueueRecordsAutoSync(reason: string) {
+  enqueueAutoDataSync('records', reason)
 }
 
 // 创建 tags 表
@@ -28,7 +33,6 @@ export async function initTagsDb() {
     await db.execute("select sortOrder from tags limit 1")
   } catch {
     // sortOrder 列不存在，添加该列
-    console.log('Adding sortOrder column to tags table')
     await db.execute("alter table tags add column sortOrder integer DEFAULT 0")
     
     // 为现有标签设置初始排序值
@@ -67,23 +71,29 @@ export async function getTags() {
 
 export async function insertTag(tag: Partial<Tag>) {
   const db = await getDb();
-  return await db.execute(
+  const result = await db.execute(
     "insert into tags (name) values ($1)",
     [tag.name]
   )
+  enqueueRecordsAutoSync('tag:insert')
+  return result
 }
 
 export async function updateTag(tag: Tag) {
   const db = await getDb();
-  return await db.execute(
+  const result = await db.execute(
     "update tags set name = $1, isLocked = $2, isPin = $3, sortOrder = $4 where id = $5",
     [tag.name, tag.isLocked, tag.isPin, tag.sortOrder, tag.id]
   )
+  enqueueRecordsAutoSync('tag:update')
+  return result
 }
 
 export async function delTag(id: number) {
   const db = await getDb();
-  return await db.execute("delete from tags where id = $1", [id])
+  const result = await db.execute("delete from tags where id = $1", [id])
+  enqueueRecordsAutoSync('tag:delete')
+  return result
 }
 
 export async function deleteAllTags() {
@@ -108,6 +118,7 @@ export async function insertTags(tags: Tag[]) {
       )
     }
   }
+  enqueueRecordsAutoSync('tag:bulk-insert')
   return true;
 }
 
@@ -119,5 +130,6 @@ export async function updateTagsOrder(tags: { id: number; sortOrder: number }[])
       [tag.sortOrder, tag.id]
     )
   }
+  enqueueRecordsAutoSync('tag:reorder')
   return true;
 }
